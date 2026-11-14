@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { configuredFields, withStatorField, findStatorValues, pickStatorTemp, findDriveValues, configFlags } from '../js/telemetry.js';
+import { configuredFields, withStatorField, findStatorValues, pickStatorTemp, findDriveValues, configFlags, itemValue } from '../js/telemetry.js';
 
 const tessieConfig = {
   synced: true,
@@ -56,4 +56,45 @@ test('onduleur et dissipateur arrière', () => {
 test('configFlags : seulement les indicateurs simples', () => {
   const f = configFlags({ synced: true, limit_reached: false, key_paired: true, config: { ca: 'secret' }, last_signal_at: 1794661659 });
   assert.deepEqual(f, { synced: true, limit_reached: false, key_paired: true, last_signal_at: 1794661659 });
+});
+
+test('flux en direct : paires { key, value } (format réel observé)', () => {
+  const msg = { vin: 'X', createdAt: '2026-11-14T19:20:00Z', isResend: false, data: [
+    { key: 'PackCurrent', value: -12 },
+    { key: 'DiStatorTempR', value: { doubleValue: 63.5 } },
+    { key: 'DiInverterTR', value: '48.25' },
+    { key: 'DiHeatsinkTR', value: 40 },
+    { key: 'DiStatorTempF', value: 21 },
+  ] };
+  assert.equal(pickStatorTemp(msg), 63.5);
+  assert.equal(pickStatorTemp(msg, 'inverter'), 48.25);
+  assert.equal(pickStatorTemp(msg, 'heatsink'), 40);
+  assert.equal(findDriveValues(msg).length, 4);
+  assert.equal(findStatorValues({ data: [{ key: 'PackCurrent', value: 3 }] }).length, 0);
+});
+
+test('itemValue', () => {
+  assert.equal(itemValue(5), 5);
+  assert.equal(itemValue('5.5'), 5.5);
+  assert.equal(itemValue({ floatValue: 7 }), 7);
+  assert.equal(itemValue({ invalid: true }), null);
+  assert.equal(itemValue(''), null);
+});
+
+import { motorFromMessage, attachMotor } from '../js/telemetry.js';
+
+test('motorFromMessage : message du flux → températures du moteur', () => {
+  const m = motorFromMessage({ createdAt: '2026-11-14T19:30:00Z', data: [{ key: 'DiStatorTempR', value: 24 }, { key: 'DiInverterTR', value: 25 }] });
+  assert.equal(m.statorTemp, 24);
+  assert.equal(m.inverterTemp, 25);
+  assert.equal(m.heatsinkTemp, null);
+  assert.equal(m.t, Date.parse('2026-11-14T19:30:00Z'));
+  assert.equal(motorFromMessage({ data: [{ key: 'PackCurrent', value: 3 }] }), null);
+});
+
+test('attachMotor : seulement si récent et sans écraser', () => {
+  const motor = { t: 100000, statorTemp: 60, inverterTemp: 45, heatsinkTemp: null };
+  assert.equal(attachMotor({ t: 130000 }, motor).statorTemp, 60);
+  assert.equal(attachMotor({ t: 130000, statorTemp: 55 }, motor).statorTemp, 55);
+  assert.equal(attachMotor({ t: 100000 + 10 * 60000 }, motor).statorTemp, undefined);
 });

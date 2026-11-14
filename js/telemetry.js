@@ -55,16 +55,43 @@ export function configFlags(json) {
 
 const KIND_RE = { stator: /stator/i, inverter: /inverter/i, heatsink: /heatsink/i };
 
-/** Valeurs dont la clé mentionne le composant (« stator » par défaut), avec leur chemin. */
+/**
+ * Valeur d'un champ du flux : nombre, texte numérique, ou objet typé façon Fleet Telemetry
+ * ({ doubleValue: 61.2 }, { stringValue: "61.2" }, …). null si rien de numérique.
+ */
+export function itemValue(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v))) return Number(v);
+  if (v && typeof v === 'object') {
+    for (const k of Object.keys(v)) {
+      const n = itemValue(v[k]);
+      if (n != null) return n;
+    }
+  }
+  return null;
+}
+
+/**
+ * Valeurs dont le nom mentionne le composant (« stator » par défaut), avec leur chemin.
+ * Gère les deux formes : propriété nommée ({ DiStatorTempR: 61 }) et paires du flux
+ * en direct de Tessie ({ data: [{ key: 'DiStatorTempR', value: … }] }).
+ */
 export function findStatorValues(obj, kind = 'stator', depth = 6, prefix = '') {
   const re = KIND_RE[kind] || KIND_RE.stator;
   const out = [];
   if (!obj || typeof obj !== 'object' || depth < 0) return out;
+  if (typeof obj.key === 'string' && 'value' in obj) {
+    if (re.test(obj.key)) {
+      const n = itemValue(obj.value);
+      if (n != null) out.push({ path: prefix ? `${prefix}.${obj.key}` : obj.key, key: obj.key, value: n });
+    }
+    return out;
+  }
   for (const k of Object.keys(obj)) {
     const v = obj[k];
     const path = prefix ? `${prefix}.${k}` : k;
     if (re.test(k) && v != null && typeof v !== 'object') out.push({ path, key: k, value: v });
-    else if (v && typeof v === 'object') out.push(...findStatorValues(v, kind, depth - 1, path));
+    else if (v && typeof v === 'object') out.push(...findStatorValues(v, kind, depth - 1, Array.isArray(obj) ? prefix : path));
   }
   return out;
 }
@@ -134,4 +161,82 @@ function collectKeys(obj, set, depth = 4, prefix = '') {
     } else if (v && typeof v === 'object') collectKeys(v, set, depth - 1, `${prefix}${k}.`);
     else set.add(prefix + k);
   }
+}
+
+/**
+ * Connexion permanente au flux en direct de Tessie (mode Direct) : transmet les
+ * températures du moteur arrière dès qu'elles arrivent (Profiler de Tessie activé).
+ * Se reconnecte seule (5 s, puis jusqu'à 5 min entre deux essais).
+ */
+export class LiveStream {
+  constructor({ vin, token, onMotor, onState }) {
+    this.vin = vin;
+    this.token = token;
+    this.onMotor = onMotor;
+    this.onState = onState || (() => {});
+    this.delay = 5000;
+    this.stopped = true;
+    this.ws = null;
+    this.timer = null;
+  }
+
+  start() {
+    if (!this.stopped) return;
+    this.stopped = false;
+    this._connect();
+  }
+
+  stop() {
+    this.stopped = true;
+    clearTimeout(this.timer);
+    if (this.ws) { try { this.ws.close(); } catch (e) { /* */ } }
+    this.ws = null;
+  }
+
+  _connect() {
+    if (this.stopped || typeof WebSocket === 'undefined') return;
+    let ws;
+    try {
+      ws = new WebSocket(`wss://streaming.tessie.com/${encodeURIComponent(this.vin)}?access_token=${encodeURIComponent(this.token)}`);
+    } catch (e) { this._retry(); return; }
+    this.ws = ws;
+    ws.onopen = () => { this.delay = 5000; this.onState('open'); };
+    ws.onclose = () => { this.onState('closed'); this._retry(); };
+    ws.onerror = () => { /* onclose suit */ };
+    ws.onmessage = (e) => {
+      let d;
+      try { d = JSON.parse(e.data); } catch (err) { return; }
+      const m = motorFromMessage(d);
+      if (m) this.onMotor(m);
+    };
+  }
+
+  _retry() {
+    if (this.stopped) return;
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this._connect(), this.delay);
+    this.delay = Math.min(this.delay * 2, 300000);
+  }
+}
+
+/** Températures du moteur arrière contenues dans un message du flux (null si aucune). */
+export function motorFromMessage(d) {
+  const m = {
+    statorTemp: pickStatorTemp(d),
+    inverterTemp: pickStatorTemp(d, 'inverter'),
+    heatsinkTemp: pickStatorTemp(d, 'heatsink'),
+  };
+  if (m.statorTemp == null && m.inverterTemp == null && m.heatsinkTemp == null) return null;
+  const t = d && d.createdAt ? Date.parse(d.createdAt) : NaN;
+  m.t = Number.isFinite(t) ? t : Date.now();
+  return m;
+}
+
+/** Applique les dernières températures du moteur à un échantillon (si récentes et absentes). */
+export function attachMotor(sample, motor, maxAgeMs = 3 * 60000) {
+  if (!sample || !motor || !Number.isFinite(motor.t) || Math.abs(sample.t - motor.t) > maxAgeMs) return sample;
+  for (const k of ['statorTemp', 'inverterTemp', 'heatsinkTemp']) {
+    if (sample[k] == null && motor[k] != null) sample[k] = motor[k];
+  }
+  return sample;
 }

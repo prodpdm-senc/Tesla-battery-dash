@@ -7,7 +7,7 @@
 <meta name="description" content="Température de batterie, préconditionnement et recharge rapide en direct via Tessie.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=16">
+<link rel="stylesheet" href="css/style.css?v=17">
 <script>
   // Script classique (sans module) : s'exécute même sur un navigateur ancien.
   // Affiche les erreurs à l'écran, puisque le navigateur de l'auto n'a pas de console.
@@ -33,7 +33,7 @@
   })();
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
-<script type="module" src="js/app.js?v=16"></script>
+<script type="module" src="js/app.js?v=17"></script>
 </head>
 <body>
 <main class="container">
@@ -129,7 +129,7 @@
       </div>
     </div>
     <div class="chart" id="chartMotor" data-label="Températures du moteur arrière dans le temps">
-      <p class="chart-empty" id="motorEmpty" hidden>Aucune température du moteur reçue. Active les champs dans <b>Réglages → Avancé → Moteur arrière</b>.</p>
+      <p class="chart-empty" id="motorEmpty" hidden>Aucune température du moteur reçue. Active le <b>Profiler</b> dans Tessie (web) ; les valeurs arrivent par le flux en direct.</p>
     </div>
   </section>
 
@@ -217,7 +217,7 @@
       <p class="muted small" id="carLinkHelp" hidden>Ce lien contient ton token : traite-le comme un mot de passe. Ouvert dans le navigateur de l'auto, il enregistre le token et le VIN, puis s'efface de la barre d'adresse.</p>
       <div class="dlg-section">
         <h3>Moteur arrière : stator, onduleur, dissipateur</h3>
-        <p class="muted small">Sur une Model 3 LFP, la batterie est surtout chauffée par le moteur arrière. Tesla peut transmettre la température du stator, de l'onduleur et du dissipateur (DiStatorTempR, DiInverterTR, DiHeatsinkTR, 1 point / min) si ces champs sont ajoutés à la télémétrie de l'auto. Le stator s'affiche dans le graphique des cellules ; les trois valeurs dans la pastille « Moteur arr. ».</p>
+        <p class="muted small">Sur une Model 3 LFP, la batterie est surtout chauffée par le moteur arrière. Pour recevoir ces températures, active le <b>Profiler</b> dans Tessie (web) : elles arrivent alors par le flux en direct et s'affichent dans le graphique « Moteur arrière » et la pastille « Moteur arr. ». Le bouton « Activer ces 3 champs » (modification de la configuration de télémétrie) n'est utile que sans le Profiler.</p>
         <div class="row-btns">
           <button class="btn" type="button" id="btnTelCheck">Vérifier</button>
           <button class="btn" type="button" id="btnTelEnable">Activer ces 3 champs</button>

@@ -1,18 +1,18 @@
-import { TessieClient, ApiError } from './tessie.js?v=16';
-import { Simulator } from './simulator.js?v=16';
-import { estimate, pickTemp, formatDuration } from './estimator.js?v=16';
-import { settings as settingsStore, history, observations, appendSample } from './store.js?v=16';
-import { createCharts } from './charts.js?v=16';
-import { Gauges } from './gauges.js?v=16';
-import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=16';
-import { DRIVE_FIELDS, configuredFields, withStatorField, findDriveValues, streamProbe, configFlags } from './telemetry.js?v=16';
-import { SessionsView, demoHistory } from './sessionsView.js?v=16';
-import { detectHeatingEnd } from './events.js?v=16';
+import { TessieClient, ApiError } from './tessie.js?v=17';
+import { Simulator } from './simulator.js?v=17';
+import { estimate, pickTemp, formatDuration } from './estimator.js?v=17';
+import { settings as settingsStore, history, observations, appendSample } from './store.js?v=17';
+import { createCharts } from './charts.js?v=17';
+import { Gauges } from './gauges.js?v=17';
+import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=17';
+import { DRIVE_FIELDS, configuredFields, withStatorField, findDriveValues, streamProbe, configFlags, LiveStream, attachMotor } from './telemetry.js?v=17';
+import { SessionsView, demoHistory } from './sessionsView.js?v=17';
+import { detectHeatingEnd } from './events.js?v=17';
 
 // Version de l'app. Le même numéro est ajouté à l'adresse de chaque fichier (?v=…)
 // pour forcer les navigateurs (Chrome iPhone, auto) à charger la nouvelle version.
 // À augmenter à chaque mise en ligne ; test/version.test.mjs vérifie la cohérence.
-export const APP_VERSION = '16';
+export const APP_VERSION = '17';
 
 const DEFAULTS = {
   vin: '',
@@ -46,6 +46,8 @@ const state = {
   gen: 0,             // incrémenté à chaque changement de mode → ignore les réponses périmées
   inFlight: null,
   lastOkAt: null,
+  motor: null,        // dernières températures du moteur arrière (flux en direct)
+  stream: null,
 };
 
 let charts;
@@ -97,6 +99,7 @@ function startLive() {
   render();
   poll();
   backfill();
+  startStream();
   if (state.s.view === 'sessions') sessions.show(`live:${state.s.vin}`);
 }
 
@@ -116,6 +119,33 @@ function stop() {
   clearTimeout(state.timer);
   state.timer = null;
   state.gen++;
+  if (state.stream) { state.stream.stop(); state.stream = null; }
+}
+
+/**
+ * Flux en direct de Tessie : apporte les températures du moteur arrière quand le
+ * Profiler de Tessie est activé (elles ne sont ni dans /state ni dans l'historique).
+ */
+function startStream() {
+  state.motor = null;
+  state.stream = new LiveStream({
+    vin: state.s.vin,
+    token: state.s.token,
+    onMotor: (m) => {
+      state.motor = Object.assign({}, state.motor || {}, Object.keys(m).reduce((o, k) => {
+        if (m[k] != null) o[k] = m[k];
+        return o;
+      }, {}));
+      // Les valeurs vont sur le dernier échantillon (pas d'échantillon séparé : sinon
+      // les courbes des cellules seraient coupées).
+      const last = state.samples[state.samples.length - 1];
+      if (last) {
+        for (const k of ['statorTemp', 'inverterTemp', 'heatsinkTemp']) if (m[k] != null) last[k] = m[k];
+      }
+      render();
+    },
+  });
+  state.stream.start();
 }
 
 /**
@@ -221,6 +251,7 @@ function schedule() {
 
 function onSample(sample) {
   const prev = state.samples[state.samples.length - 1];
+  attachMotor(sample, state.motor);
   const added = appendSample(state.samples, sample);
   if (added) {
     recordHeatingEnd(prev, sample);
