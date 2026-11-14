@@ -39,7 +39,11 @@ class TimeChart {
       .on('pointerleave', (e) => { if (e.pointerType === 'mouse') this._hideHover(); });
     // Sur écran tactile, toucher ailleurs masque l'infobulle.
     document.addEventListener('pointerdown', (e) => { if (!el.contains(e.target)) this._hideHover(); });
-    new ResizeObserver(() => this.render()).observe(el);
+    // Redessine au redimensionnement (fenêtre, rotation, changement de mise en page), une fois par image.
+    let raf = 0;
+    const onResize = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => this.render()); };
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(onResize).observe(el);
+    window.addEventListener('resize', onResize);
   }
 
   update(data, domain, extras = {}) {
@@ -51,11 +55,11 @@ class TimeChart {
 
   render() {
     if (!this.data) return;
-    const w = Math.max(280, this.el.clientWidth);
-    // Hauteur ajustable en CSS (--chart-h), sinon valeur par défaut.
-    const h = parseFloat(getComputedStyle(this.el).getPropertyValue('--chart-h')) || this.height;
+    // Taille lue sur le conteneur (fixée par le CSS) : le SVG suit la fenêtre sans jamais l'élargir.
+    const w = Math.max(200, this.el.clientWidth);
+    const h = Math.max(80, this.el.clientHeight || this.height);
     const iw = w - M.left - M.right, ih = h - M.top - M.bottom;
-    this.svg.attr('viewBox', `0 0 ${w} ${h}`).attr('width', w).attr('height', h);
+    this.svg.attr('viewBox', `0 0 ${w} ${h}`);
 
     const data = this.data.filter((d) => d.t >= this.domain[0]);
     const x = d3.scaleTime().domain(this.domain).range([M.left, M.left + iw]);

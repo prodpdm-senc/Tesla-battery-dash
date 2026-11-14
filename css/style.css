@@ -134,8 +134,10 @@ h2 { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px; }
 .seg button + button { border-left: 1px solid var(--border); }
 .seg button[aria-pressed="true"] { background: var(--surface-2); color: var(--text-primary); }
 
-.chart { position: relative; width: 100%; }
-.chart-svg { display: block; overflow: visible; }
+.chart { position: relative; width: 100%; min-width: 0; height: 240px; }
+#chartPower { height: 160px; }
+.chart-svg { position: absolute; top: 0; left: 0; display: block; width: 100%; height: 100%; overflow: visible; }
+.card, .hero, .rail, .col, .gauge, .chip { min-width: 0; }
 .axis text { fill: var(--text-muted); font: 10px 'DM Mono', monospace; }
 .axis .domain, .axis line { stroke: var(--border); }
 .grid line { stroke: var(--grid); }
@@ -233,15 +235,19 @@ dialog details summary { cursor: pointer; font-size: 12px; color: var(--text-sec
 #obsCard { order: 5; }
 .footer { order: 6; }
 
-/* Grand écran paysage (écran de l'auto, ordinateur) : jauges à gauche, le reste à droite */
-@media (min-width: 1100px) {
-  .container { max-width: 1600px; grid-template-columns: minmax(360px, 4fr) minmax(0, 8fr); align-items: start; }
+/* Écran large (auto, ordinateur, ou navigateur pas en plein écran) : jauges à gauche,
+   résumé et graphiques à droite. Les hauteurs suivent la hauteur de la fenêtre pour
+   éviter de défiler ; la 1re valeur sert de repli aux navigateurs sans clamp(). */
+@media (min-width: 820px) {
+  .container { max-width: 1600px; grid-template-columns: minmax(250px, 4fr) minmax(0, 8fr); align-items: start; }
   .header, .banner, .fatal, .footer, #obsCard { grid-column: 1 / -1; }
   .rail { grid-column: 1; order: 1; }
-  .col { display: grid; gap: 16px; grid-column: 2; order: 1; }
-  .gauges { --bar-h: 180px; }
+  .col { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; grid-column: 2; order: 1; }
+  /* height direct (pas de variable) : si clamp() n'est pas compris, la 1re valeur reste. */
+  .gauge-body { height: 160px; height: clamp(70px, calc(50vh - 245px), 240px); }
+  #chartTemp { height: 220px; height: clamp(140px, calc(60vh - 330px), 480px); }
+  #chartPower { height: 140px; height: clamp(100px, calc(40vh - 220px), 320px); }
 }
-
 /* Mode auto : texte et zones tactiles plus grands, lisibles d'un coup d'œil */
 .car body, body.car { padding: 16px 20px; }
 .car .btn { min-height: 48px; min-width: 48px; font-size: 15px; padding: 10px 16px; }
@@ -255,15 +261,33 @@ dialog details summary { cursor: pointer; font-size: 12px; color: var(--text-sec
 .car .chip-label, .car .gauge-label { font-size: 13px; }
 .car .gauge-value { font-size: 26px; }
 .car .gauge-scale { font-size: 12px; }
-.car .gauges { --bar-h: 200px; }
 .car .axis text, .car .target-label, .car .direct-labels text { font-size: 13px; }
 .car .tooltip { font-size: 14px; }
 .car dialog input, .car dialog select { font-size: 18px !important; padding: 12px !important; }
 .car dialog label { font-size: 15px; }
 .car .footer { display: none; }
 /* L'écran de l'auto est moins haut : graphiques plus bas pour tout voir sans défiler */
-.car #chartTemp { --chart-h: 200px; }
-.car #chartPower { --chart-h: 130px; }
 .car .hero { padding: 16px 20px; }
 .car .hero-value { font-size: 64px; }
 .car .banner { padding: 6px 12px; }
+
+/* Placé en dernier pour passer devant les règles du mode auto. */
+/* Entre 820 et 1250 px : résumé compact, temps restant à gauche, 3 valeurs empilées à droite */
+@media (min-width: 820px) and (max-width: 1249px) {
+  .hero { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 14px 16px; }
+  .hero-stats { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .hero-value, .car .hero-value { font-size: 44px; }
+  .stat-value, .car .stat-value { font-size: 20px; margin-top: 2px; }
+  .stat-sub, .car .stat-sub { font-size: 11px; }
+  #chartTemp { height: clamp(130px, calc(60vh - 340px), 480px); }
+  #chartPower { height: clamp(90px, calc(40vh - 225px), 320px); }
+  .gauge-scale { font-size: 9px; padding-right: 3px; }
+  .gauge-body { grid-template-columns: 1fr 20px 1fr; }
+  .chip-val, .car .chip-val { font-size: 12px; }
+  .gauge-value, .car .gauge-value { font-size: 18px; }
+}
+/* Fenêtre basse : on garde des graphiques lisibles, quitte à défiler */
+@media (max-height: 560px) and (min-width: 820px) {
+  .gauge-body { height: 70px; }
+}
+
