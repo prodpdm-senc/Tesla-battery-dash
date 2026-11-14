@@ -28,17 +28,29 @@ export function configuredFields(json) {
 }
 
 /**
- * Corps à envoyer pour AJOUTER le champ du stator à la configuration existante,
- * sans retirer ni modifier les autres champs ni réglages.
- * Retourne null si la configuration actuelle est illisible (on n'envoie alors rien :
- * envoyer seulement notre champ pourrait remplacer la configuration de Tessie).
+ * Corps à envoyer pour AJOUTER les champs du moteur à la configuration existante :
+ * seulement { fields } (forme documentée par Tessie), avec TOUS les champs actuels
+ * inchangés plus les nouveaux. Le reste de la configuration (serveur, certificat,
+ * expiration, identifiants) appartient à Tessie et n'est jamais renvoyé.
+ * Retourne null si la configuration actuelle est illisible ou vide (on n'envoie alors
+ * rien : envoyer seulement nos champs pourrait remplacer ceux de Tessie).
  */
 export function withStatorField(json, fields = DRIVE_FIELDS, interval = STATOR_INTERVAL_S) {
   const h = findFieldsHolder(json);
   if (!h || !Object.keys(h.fields).length) return null;
-  const body = JSON.parse(JSON.stringify(h));
-  for (const f of [].concat(fields)) if (!body.fields[f]) body.fields[f] = { interval_seconds: interval };
-  return body;
+  const merged = JSON.parse(JSON.stringify(h.fields));
+  for (const f of [].concat(fields)) if (!merged[f]) merged[f] = { interval_seconds: interval };
+  return { fields: merged };
+}
+
+/** Indicateurs d'état de la configuration (booléens et dates seulement, rien de sensible). */
+export function configFlags(json) {
+  const out = {};
+  if (!json || typeof json !== 'object') return out;
+  for (const k of ['synced', 'limit_reached', 'key_paired', 'update_available', 'last_signal_at']) {
+    if (k in json && (json[k] === null || typeof json[k] !== 'object')) out[k] = json[k];
+  }
+  return out;
 }
 
 const KIND_RE = { stator: /stator/i, inverter: /inverter/i, heatsink: /heatsink/i };
