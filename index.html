@@ -7,7 +7,7 @@
 <meta name="description" content="Température de batterie, préconditionnement et recharge rapide en direct via Tessie.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=12">
+<link rel="stylesheet" href="css/style.css?v=13">
 <script>
   // Script classique (sans module) : s'exécute même sur un navigateur ancien.
   // Affiche les erreurs à l'écran, puisque le navigateur de l'auto n'a pas de console.
@@ -33,7 +33,7 @@
   })();
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
-<script type="module" src="js/app.js?v=12"></script>
+<script type="module" src="js/app.js?v=13"></script>
 </head>
 <body>
 <main class="container">
@@ -52,7 +52,7 @@
         <button type="button" data-view="sessions">Sessions</button>
       </div>
       <button class="btn" id="btnDemo" type="button" aria-pressed="false">Démo</button>
-      <button class="btn" id="btnRefresh" type="button" title="Actualiser maintenant">↻</button>
+      <button class="btn btn-icon" id="btnRefresh" type="button" title="Actualiser maintenant" aria-label="Actualiser maintenant"><svg class="icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button class="btn btn-primary" id="btnSettings" type="button">Réglages</button>
     </div>
   </header>
@@ -141,7 +141,7 @@
         <button type="button" data-p="30j">30 jours</button>
       </div>
       <span class="sess-msg" id="sessMsg" role="status"></span>
-      <button class="btn" id="sessRefresh" type="button" title="Relire l'historique Tessie">↻</button>
+      <button class="btn btn-icon" id="sessRefresh" type="button" title="Relire l'historique Tessie" aria-label="Relire l'historique Tessie"><svg class="icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     </div>
     <div class="sess-lists">
       <section class="card sess-card">

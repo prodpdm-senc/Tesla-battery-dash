@@ -123,8 +123,9 @@ class TimeChart {
       const ty = y(this.extras.target);
       this.gExtra.append('line').attr('class', 'target-line')
         .attr('x1', M.left).attr('x2', M.left + iw).attr('y1', ty).attr('y2', ty);
+      // Étiquette à gauche, au-dessus de la ligne : la droite est réservée aux valeurs actuelles.
       this.gExtra.append('text').attr('class', 'target-label')
-        .attr('x', M.left + iw + 4).attr('y', ty).attr('dy', '0.32em')
+        .attr('x', M.left + 6).attr('y', ty - 5)
         .text(`Cible ${this.extras.target} °C`);
     }
     // Projection pointillée vers la cible.

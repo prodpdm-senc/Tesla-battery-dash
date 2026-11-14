@@ -1,17 +1,17 @@
-import { TessieClient, ApiError } from './tessie.js?v=12';
-import { Simulator } from './simulator.js?v=12';
-import { estimate, pickTemp, formatDuration } from './estimator.js?v=12';
-import { settings as settingsStore, history, observations, appendSample } from './store.js?v=12';
-import { createCharts } from './charts.js?v=12';
-import { Gauges } from './gauges.js?v=12';
-import { summarize, formatReport, statesToSamples, mergeSamples } from './history.js?v=12';
-import { SessionsView, demoHistory } from './sessionsView.js?v=12';
-import { detectHeatingEnd } from './events.js?v=12';
+import { TessieClient, ApiError } from './tessie.js?v=13';
+import { Simulator } from './simulator.js?v=13';
+import { estimate, pickTemp, formatDuration } from './estimator.js?v=13';
+import { settings as settingsStore, history, observations, appendSample } from './store.js?v=13';
+import { createCharts } from './charts.js?v=13';
+import { Gauges } from './gauges.js?v=13';
+import { summarize, formatReport, statesToSamples, mergeSamples } from './history.js?v=13';
+import { SessionsView, demoHistory } from './sessionsView.js?v=13';
+import { detectHeatingEnd } from './events.js?v=13';
 
 // Version de l'app. Le même numéro est ajouté à l'adresse de chaque fichier (?v=…)
 // pour forcer les navigateurs (Chrome iPhone, auto) à charger la nouvelle version.
 // À augmenter à chaque mise en ligne ; test/version.test.mjs vérifie la cohérence.
-export const APP_VERSION = '12';
+export const APP_VERSION = '13';
 
 const DEFAULTS = {
   vin: '',

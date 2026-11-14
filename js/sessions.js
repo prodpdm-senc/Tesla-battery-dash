@@ -2,7 +2,7 @@
 // Module pur (aucun DOM), testé. Entrée : échantillons triés (history.statesToSamples).
 // Convention : powerKw positif = énergie qui sort de la batterie.
 
-import { linearFit } from './estimator.js?v=12';
+import { linearFit } from './estimator.js?v=13';
 
 const MIN = 60000;
 
@@ -84,7 +84,9 @@ export function detectChargingSessions(samples, { gapMs = 15 * MIN, minDurMs = 3
       tempStart: tmin.length ? tmin[0] : null,
       tempPeak: tmax.length ? Math.max(...tmax) : null,
       outsideTemp: ext.length ? median(ext) : null,
-      curve: pts.filter((p) => finite(p.soc)).map((p) => ({ t: p.t, soc: p.soc, kw: chargePowerKw(p), temp: p.tempMin })),
+      // Sans les points à ~0 kW du début et de la fin (sinon traits verticaux jusqu'à 0).
+      curve: pts.filter((p) => finite(p.soc) && chargePowerKw(p) >= 0.5)
+        .map((p) => ({ t: p.t, soc: p.soc, kw: chargePowerKw(p), temp: p.tempMin })),
     });
   }
   return out;

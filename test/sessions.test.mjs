@@ -75,3 +75,14 @@ test('rien à détecter sur un historique vide', () => {
   assert.deepEqual(detectChargingSessions([]), []);
   assert.deepEqual(detectHeatingSessions([]), []);
 });
+
+test('courbe de recharge sans les points à 0 kW du début et de la fin', () => {
+  const s = [];
+  for (let m = 0; m <= 60; m++) {
+    const on = m >= 5 && m <= 55;
+    s.push({ t: m * MIN, soc: 50 + Math.floor(m / 2), chargingState: on ? 'Charging' : 'Disconnected', chargerPowerKw: on ? (m === 5 || m === 55 ? 0 : 7) : 0 });
+  }
+  const [c] = detectChargingSessions(s);
+  assert.ok(c.curve.length > 40);
+  assert.ok(c.curve.every((p) => p.kw >= 0.5));
+});
