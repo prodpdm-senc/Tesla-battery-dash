@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { findRecords, findKey, summarize, formatReport, shape } from '../js/history.js';
+import { findRecords, findKey, summarize, formatReport, shape, columnarToRecords, singular } from '../js/history.js';
 
 test('findRecords trouve le tableau peu importe l\'enveloppe', () => {
   assert.equal(findRecords({ results: [{ a: 1 }] }).length, 1);
@@ -48,7 +48,7 @@ test('summarize : réponse vide', () => {
 });
 
 test('findRecords cherche dans un objet imbriqué', () => {
-  assert.equal(findRecords({ results: { states: [{ a: 1 }, { a: 2 }] } }).length, 2);
+  assert.equal(findRecords({ results: { list: [{ a: 1 }, { a: 2 }] } }).length, 2);
   assert.equal(findRecords({ results: [], extra: { list: [{ a: 1 }] } }).length, 1);
 });
 
@@ -57,4 +57,35 @@ test('shape décrit la structure sans les valeurs', () => {
   assert.equal(sh, '{results: [2 × {timestamp, latitude, charge_state: {battery_level}}]}');
   assert.ok(!sh.includes('45.5'));
   assert.equal(shape({ results: [] }), '{results: [0]}');
+});
+
+test('singular', () => {
+  assert.equal(singular('battery_levels'), 'battery_level');
+  assert.equal(singular('ids'), 'id');
+  assert.equal(singular('batteries'), 'battery');
+  assert.equal(singular('pack_voltage'), 'pack_voltage');
+});
+
+test('format en colonnes de Tessie (réponse réelle observée)', () => {
+  const base = 1_794_660_000;
+  const json = { results: {
+    ids: [1, 2, 3], timestamps: [base, base + 60, base + 120],
+    states: ['online', 'online', 'online'], charging_states: ['Disconnected', 'Disconnected', 'Charging'],
+    battery_levels: [57, 57, 58], module_temp_mins: [20, 21, 22], outside_temps: [5, 5, 6],
+  } };
+  const recs = findRecords(json);
+  assert.equal(recs.length, 3);
+  assert.deepEqual(recs[2], { id: 3, timestamp: base + 120, state: 'online', charging_state: 'Charging', battery_level: 58, module_temp_min: 22, outside_temp: 6 });
+  const s = summarize(json);
+  assert.equal(s.count, 3);
+  assert.equal(s.medianIntervalS, 60);
+  const f = Object.fromEntries(s.fields.map((x) => [x.name, x]));
+  assert.equal(f['Temp. module min'].filled, 1);
+  assert.equal(f['État de recharge'].path, 'charging_state');
+  assert.match(formatReport(s), /Colonnes \/ clés \(7\)/);
+});
+
+test('columnarToRecords ignore les listes de points et les objets simples', () => {
+  assert.equal(columnarToRecords({ a: [{ x: 1 }], b: [{ x: 2 }] }), null);
+  assert.equal(columnarToRecords({ a: 1 }), null);
 });
