@@ -52,7 +52,8 @@ class TimeChart {
   render() {
     if (!this.data) return;
     const w = Math.max(280, this.el.clientWidth);
-    const h = this.height;
+    // Hauteur ajustable en CSS (--chart-h), sinon valeur par défaut.
+    const h = parseFloat(getComputedStyle(this.el).getPropertyValue('--chart-h')) || this.height;
     const iw = w - M.left - M.right, ih = h - M.top - M.bottom;
     this.svg.attr('viewBox', `0 0 ${w} ${h}`).attr('width', w).attr('height', h);
 
@@ -69,13 +70,14 @@ class TimeChart {
     this.x = x; this.y = y; this.visible = data;
 
     const ticksX = Math.max(2, Math.floor(iw / 90));
+    const ticksY = Math.max(2, Math.min(5, Math.floor(ih / 32)));
     this.gX.attr('transform', `translate(0,${M.top + ih})`)
       .call(d3.axisBottom(x).ticks(ticksX).tickFormat(fmtTime).tickSizeOuter(0));
     this.gY.attr('transform', `translate(${M.left},0)`)
-      .call(d3.axisLeft(y).ticks(5).tickSize(0).tickPadding(6));
+      .call(d3.axisLeft(y).ticks(ticksY).tickSize(0).tickPadding(6));
     this.gY.select('.domain').remove();
     this.gGrid.attr('transform', `translate(${M.left},0)`)
-      .call(d3.axisLeft(y).ticks(5).tickSize(-iw).tickFormat(''));
+      .call(d3.axisLeft(y).ticks(ticksY).tickSize(-iw).tickFormat(''));
     this.gGrid.select('.domain').remove();
 
     // Zone min–max (bande) si demandée.

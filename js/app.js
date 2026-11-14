@@ -3,6 +3,7 @@ import { Simulator } from './simulator.js';
 import { estimate, pickTemp, formatDuration } from './estimator.js';
 import { settings as settingsStore, history, observations, appendSample } from './store.js';
 import { createCharts } from './charts.js';
+import { Gauges } from './gauges.js';
 
 const DEFAULTS = {
   vin: '',
@@ -47,7 +48,7 @@ function init() {
   window.__appStarted = true;
   importSetupFromHash();
   charts = createCharts({ tempEl: $('chartTemp'), powerEl: $('chartPower') });
-  buildTiles();
+  buildGauges();
   bindUi();
   syncRangeButtons();
   if (state.s.demo) startDemo();
@@ -198,7 +199,7 @@ function render() {
   const last = state.samples[state.samples.length - 1];
   renderStatus(last);
   renderHero(est, last);
-  renderTiles(last);
+  renderGauges(last);
   renderCharts(est, last);
   renderObs();
 }
@@ -263,18 +264,25 @@ function metricLabel() {
   return { min: 'module min', avg: 'moyenne', max: 'module max' }[state.s.metric] || 'module min';
 }
 
-const TILES = [
-  { id: 'voltage', label: 'Tension pack', unit: 'V', get: (s) => fmt(s.voltage, 1) },
-  { id: 'current', label: 'Courant pack', unit: 'A', get: (s) => fmt(s.current, 1) },
-  { id: 'power', label: 'Puissance pack', unit: 'kW', get: (s) => fmt(s.powerKw, 1), sub: () => '+ = vers la batterie' },
-  { id: 'soc', label: 'Charge', unit: '%', get: (s) => fmt(s.soc, 0),
-    sub: (s) => [s.energyKwh != null ? `${fmt(s.energyKwh)} kWh` : null, s.chargeLimit != null ? `limite ${s.chargeLimit} %` : null].filter(Boolean).join(' · ') },
-  { id: 'charger', label: 'Chargeur', unit: 'kW', get: (s) => fmt(s.chargerPowerKw, 0),
-    sub: (s) => `${fmt(s.chargerVoltage, 0)} V · ${fmt(s.chargerCurrent, 0)} A` },
-  { id: 'chgState', label: 'Recharge', get: (s) => chargingLabel(s), sub: (s) => (s.fastCharger ? `DC rapide${s.fastChargerType ? ` · ${s.fastChargerType}` : ''}` : '') },
-  { id: 'heater', label: 'Chauffage batterie', pill: (s) => s.heaterOn },
-  { id: 'precond', label: 'Préconditionnement', pill: (s) => s.preconditioning },
-  { id: 'outside', label: 'Extérieur', unit: '°C', get: (s) => fmt(s.outsideTemp, 1) },
+// Échelles fixes (pack LFP ~ 350 V). À ajuster au besoin : une valeur hors échelle
+// remplit la barre au maximum et s'affiche quand même en texte.
+const GAUGES = [
+  { id: 'voltage', label: 'Tension', unit: 'V', min: 280, max: 420, get: (s) => s.voltage },
+  { id: 'current', label: 'Courant', unit: 'A', min: -500, max: 500, signed: true, get: (s) => s.current },
+  { id: 'power', label: 'Puissance', unit: 'kW', min: -200, max: 200, decimals: 1, signed: true, get: (s) => s.powerKw,
+    sub: () => '+ = charge' },
+  { id: 'soc', label: 'Charge', unit: '%', min: 0, max: 100, get: (s) => s.soc, marker: (s) => s.chargeLimit,
+    sub: (s) => (s.energyKwh != null ? `${fmt(s.energyKwh)} kWh` : '') },
+  { id: 'charger', label: 'Chargeur', unit: 'kW', min: 0, max: 250, get: (s) => s.chargerPowerKw,
+    sub: (s) => (s.chargerVoltage || s.chargerCurrent ? `${fmt(s.chargerVoltage, 0)} V · ${fmt(s.chargerCurrent, 0)} A` : '') },
+  { id: 'outside', label: 'Extérieur', unit: '°C', min: -30, max: 40, decimals: 1, signed: true, get: (s) => s.outsideTemp },
+];
+
+const CHIPS = [
+  { id: 'chgState', label: 'Recharge', text: (s) => chargingLabel(s) + (s.fastCharger ? ' · DC' : ''),
+    on: (s) => s.chargingState === 'Charging' },
+  { id: 'heater', label: 'Chauffage', on: (s) => s.heaterOn },
+  { id: 'precond', label: 'Précond.', on: (s) => s.preconditioning },
 ];
 
 function chargingLabel(s) {
@@ -282,26 +290,20 @@ function chargingLabel(s) {
   return map[s.chargingState] || s.chargingState || '—';
 }
 
-function buildTiles() {
-  $('tiles').innerHTML = TILES.map((t) => `
-    <div class="tile">
-      <div class="label">${t.label}</div>
-      <div class="tile-value" id="tile-${t.id}">—${t.unit ? `<span class="unit">${t.unit}</span>` : ''}</div>
-      <div class="tile-sub" id="tile-${t.id}-sub"></div>
-    </div>`).join('');
+let gauges;
+
+function buildGauges() {
+  $('chips').innerHTML = CHIPS.map((c) => `
+    <div class="chip" id="chip-${c.id}"><span class="chip-label">${c.label}</span><span class="chip-val" id="chip-${c.id}-val">—</span></div>`).join('');
+  gauges = new Gauges($('gauges'), GAUGES);
 }
 
-function renderTiles(s) {
-  for (const t of TILES) {
-    const el = $(`tile-${t.id}`), sub = $(`tile-${t.id}-sub`);
-    if (!s) { el.textContent = '—'; sub.textContent = ''; continue; }
-    if (t.pill) {
-      const on = t.pill(s);
-      el.innerHTML = `<span class="pill" data-on="${on === true}">${on == null ? '—' : on ? 'Actif' : 'Inactif'}</span>`;
-    } else {
-      el.innerHTML = `${t.get(s)}${t.unit ? `<span class="unit">${t.unit}</span>` : ''}`;
-    }
-    sub.textContent = t.sub ? t.sub(s) : '';
+function renderGauges(s) {
+  gauges.update(s || null);
+  for (const c of CHIPS) {
+    const on = s ? c.on(s) : null;
+    $(`chip-${c.id}`).setAttribute('data-on', String(on === true));
+    $(`chip-${c.id}-val`).textContent = !s ? '—' : c.text ? c.text(s) : on == null ? '—' : on ? 'Actif' : 'Inactif';
   }
 }
 
