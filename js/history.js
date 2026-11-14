@@ -20,19 +20,44 @@ export const WANTED = {
 };
 
 /** Trouve le tableau d'états dans la réponse, peu importe l'enveloppe. */
-export function findRecords(json) {
+export function findRecords(json, depth = 3) {
   if (Array.isArray(json)) return json;
-  if (!json || typeof json !== 'object') return [];
+  if (!json || typeof json !== 'object' || depth < 0) return [];
   for (const k of ['results', 'states', 'data', 'items']) {
-    if (Array.isArray(json[k])) return json[k];
+    if (Array.isArray(json[k]) && json[k].length) return json[k];
   }
-  // Repli : le plus long tableau d'objets à la racine.
+  // Repli : le plus long tableau d'objets, cherché aussi dans les sous-objets
+  // (ex. { results: { states: [...] } }).
   let best = [];
   for (const k of Object.keys(json)) {
     const v = json[k];
-    if (Array.isArray(v) && v.length > best.length && typeof v[0] === 'object') best = v;
+    const cand = Array.isArray(v) ? (v.length && typeof v[0] === 'object' ? v : []) : findRecords(v, depth - 1);
+    if (cand.length > best.length) best = cand;
   }
   return best;
+}
+
+/**
+ * Structure de la réponse, sans aucune valeur (pas de position ni de donnée perso) :
+ * types, clés et longueurs des tableaux. Ex. {results: [0]} ou {results: {states: [42 × {timestamp, …}]}}.
+ */
+export function shape(v, depth = 3) {
+  if (v === null) return 'null';
+  if (Array.isArray(v)) {
+    if (!v.length) return '[0]';
+    return `[${v.length} × ${shape(v[0], depth)}]`;
+  }
+  if (typeof v === 'object') {
+    const keys = Object.keys(v);
+    if (depth <= 0) return `{${keys.length} clés}`;
+    const shown = keys.slice(0, 12).map((k) => {
+      const x = v[k];
+      const inner = x && typeof x === 'object' ? `: ${shape(x, depth - 1)}` : '';
+      return k + inner;
+    });
+    return `{${shown.join(', ')}${keys.length > 12 ? `, … +${keys.length - 12}` : ''}}`;
+  }
+  return typeof v;
 }
 
 /** Cherche une clé dans un objet (et ses sous-objets, 3 niveaux). Retourne { path, value }. */
@@ -78,6 +103,7 @@ export function summarize(json) {
   const recs = findRecords(json);
   const out = {
     envelope: Array.isArray(json) ? '[tableau]' : Object.keys(json || {}).join(', '),
+    shape: shape(json, 4),
     count: recs.length,
     firstKeys: recs[0] && typeof recs[0] === 'object' ? Object.keys(recs[0]) : [],
     start: null, end: null, medianIntervalS: null, minIntervalS: null,
@@ -116,6 +142,7 @@ export function formatReport(sum, { requested } = {}) {
     'RAPPORT HISTORIQUE TESSIE',
     requested ? `Demandé : ${requested}` : null,
     `Enveloppe : ${sum.envelope || '—'}`,
+    `Structure : ${sum.shape || '—'}`,
     `Points : ${sum.count}`,
     `Période : ${d(sum.start)} → ${d(sum.end)}`,
     `Intervalle médian : ${sum.medianIntervalS == null ? '—' : sum.medianIntervalS.toFixed(0) + ' s'}`
