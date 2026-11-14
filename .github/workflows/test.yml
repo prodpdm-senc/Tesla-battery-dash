@@ -8,7 +8,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node --test test/estimator.test.mjs test/history.test.mjs test/events.test.mjs test/version.test.mjs test/sessions.test.mjs
+      - run: node --test test/estimator.test.mjs test/history.test.mjs test/events.test.mjs test/version.test.mjs test/sessions.test.mjs test/telemetry.test.mjs
       # Le navigateur de l'auto peut être un Chromium ancien (79) : on refuse la syntaxe plus récente qu'ES2019.
       - name: Syntaxe compatible avec le navigateur Tesla
         run: for f in js/*.js; do npx --yes acorn@8.14.0 --ecma2019 --module --silent "$f" || exit 1; done

@@ -17,6 +17,7 @@
   --series-1: #3e6ae1;   /* bleu : module min, pack */
   --series-2: #c97700;   /* ambre : module max */
   --series-3: #1f9d48;   /* vert : chargeur, recharge */
+  --series-4: #d0457a;   /* magenta : stator du moteur arrière */
   --target: #5c5e62;
   --accent: #3e6ae1;
   --seg-on-bg: #ffffff;
@@ -42,6 +43,7 @@
     --series-1: #4a7cf2;
     --series-2: #cf7a1e;
     --series-3: #2fae52;
+    --series-4: #d55181;
     --target: #b0b1b5;
     --accent: #3e6ae1;
     --seg-on-bg: #d9dadc;
@@ -63,6 +65,7 @@
   --series-1: #4a7cf2;
   --series-2: #cf7a1e;
   --series-3: #2fae52;
+  --series-4: #d55181;
   --target: #b0b1b5;
   --accent: #3e6ae1;
   --seg-on-bg: #d9dadc;
@@ -169,7 +172,8 @@ h2 { font-weight: 600; font-size: 14px; }
 .seg button[aria-pressed="true"] { background: var(--seg-on-bg); color: var(--seg-on-text); }
 
 .chart { position: relative; width: 100%; min-width: 0; height: 220px; }
-#chartPower { height: 180px; }
+#chartMotor { height: 180px; }
+.chart-empty { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 0 16px; font-size: 12px; color: var(--text-muted); z-index: 1; pointer-events: none; }
 .chart-svg { position: absolute; top: 0; left: 0; display: block; width: 100%; height: 100%; overflow: visible; }
 .card, .hero, .rail, .col, .gauge, .chip { min-width: 0; }
 .axis text, .unit-label, .target-label, .value-label { font-family: var(--font); }
@@ -205,7 +209,7 @@ h2 { font-weight: 600; font-size: 14px; }
 
 /* ── Panneau de jauges (barres verticales) ── */
 .rail { display: grid; gap: 8px; align-content: start; }
-.chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.chips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .chip { background: var(--surface-1); border-radius: 10px; padding: 7px 10px; min-width: 0; }
 .chip-label { display: block; }
 .chip-val { display: flex; align-items: center; font-size: 13px; font-weight: 500; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -269,6 +273,9 @@ dialog input:focus, dialog select:focus { outline: none; border-color: var(--acc
 dialog .row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 dialog .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 dialog details summary { cursor: pointer; font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-bottom: 8px; }
+.row-btns { display: flex; flex-wrap: wrap; margin-top: 8px; }
+.row-btns .btn { margin: 0 8px 8px 0; }
+.dlg-section { margin-top: 6px; }
 .dlg-section h3 { font-size: 14px; font-weight: 600; color: var(--text-primary); }
 .hist-report { white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, Menlo, monospace; font-size: 11px; line-height: 1.5; max-height: 40vh; overflow: auto; background: var(--surface-2); border-radius: 8px; padding: 10px; color: var(--text-secondary); }
 .dialog-actions { display: grid; grid-auto-flow: column; justify-content: end; gap: 8px; }
@@ -287,7 +294,7 @@ dialog details summary { cursor: pointer; font-size: 12px; font-weight: 500; col
 .col { display: contents; }
 .hero { order: 1; }
 #cardTemp { order: 2; }
-#cardPower { order: 3; }
+#cardMotor { order: 3; }
 .rail { order: 4; }
 
 /* ≥ 600 px (navigateur de l'auto, plein écran ou non, ordinateur, tablette) :
@@ -331,8 +338,8 @@ dialog details summary { cursor: pointer; font-size: 12px; font-weight: 500; col
   .card-head > * { margin-top: 0; }
   /* Température un peu plus haute que la puissance, sans écraser cette dernière */
   #cardTemp { flex: 1.25 1 0; }
-  #cardPower { flex: 1 1 0; }
-  .chart, #chartPower { flex: 1 1 auto; height: auto; min-height: 60px; }
+  #cardMotor { flex: 1 1 0; }
+  .chart, #chartMotor { flex: 1 1 auto; height: auto; min-height: 60px; }
 }
 
 /* Plus large : résumé sur une seule ligne (4 valeurs), 3 jauges par rangée */
@@ -343,9 +350,9 @@ dialog details summary { cursor: pointer; font-size: 12px; font-weight: 500; col
   .hero-stats > .stat { padding-left: 14px; border-left: 1px solid var(--border); }
   .gauge-value { font-size: 20px; }
 }
-/* Colonne de jauges assez large : les 3 pastilles côte à côte */
+/* Colonne de jauges assez large : pastilles en 2 × 2 */
 @media (min-width: 1300px) {
-  .chips { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .chips { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
   .chip { display: block; padding: 7px 10px; }
   .chip-val { margin-top: 3px; }
 }

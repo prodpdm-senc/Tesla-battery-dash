@@ -6,6 +6,7 @@ export class Simulator {
   constructor({ start = Date.now() - 12 * 60000, ambient = -5, initial = 8 } = {}) {
     this.t = start;
     this.T = initial;          // °C, module le plus froid
+    this.S = initial + 2;      // °C, stator du moteur arrière (chauffe la batterie)
     this.ambient = ambient;
     this.soc = 22;
     this.phase = 'precond';    // precond → hold → charge → idle
@@ -49,6 +50,9 @@ export class Simulator {
       if (this.soc >= 80) this._next('idle');
     }
     this.T += ((heat - loss) * h) / C;
+    // Stator : monte vite pendant la chauffe (moteur volontairement inefficace), puis redescend vers la batterie.
+    const sTarget = this.phase === 'precond' ? 85 : this.T + 4;
+    this.S += (sTarget - this.S) * (this.phase === 'precond' ? 0.03 : 0.01);
     this.t += dt;
   }
 
@@ -89,6 +93,9 @@ export class Simulator {
       heaterOn: false,          // sur l'auto testée, ce drapeau reste faux pendant la chauffe
       preconditioning: precond,
       outsideTemp: this.ambient,
+      statorTemp: Math.round(this.S * 10) / 10,
+      inverterTemp: Math.round((this.S * 0.55 + 10) * 10) / 10,
+      heatsinkTemp: Math.round(((this.S + this.T) / 2) * 10) / 10,
       minutesToFull: null,
       chargeLimit: 80,
       vehicleState: 'online',

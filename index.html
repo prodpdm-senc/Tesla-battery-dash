@@ -7,7 +7,7 @@
 <meta name="description" content="Température de batterie, préconditionnement et recharge rapide en direct via Tessie.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=14">
+<link rel="stylesheet" href="css/style.css?v=15">
 <script>
   // Script classique (sans module) : s'exécute même sur un navigateur ancien.
   // Affiche les erreurs à l'écran, puisque le navigateur de l'auto n'a pas de console.
@@ -33,7 +33,7 @@
   })();
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
-<script type="module" src="js/app.js?v=14"></script>
+<script type="module" src="js/app.js?v=15"></script>
 </head>
 <body>
 <main class="container">
@@ -117,17 +117,20 @@
     <div class="chart" id="chartTemp" data-label="Température des modules de batterie dans le temps"></div>
   </section>
 
-  <section class="card" id="cardPower">
+  <section class="card" id="cardMotor">
     <div class="card-head">
       <div class="card-title">
-        <h2>Puissance</h2>
+        <h2>Moteur arrière</h2>
         <div class="legend">
-          <span class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>Pack (V × I)</span>
-          <span class="legend-item"><span class="swatch" style="background:var(--series-3)"></span>Chargeur</span>
+          <span class="legend-item"><span class="swatch" style="background:var(--series-4)"></span>Stator</span>
+          <span class="legend-item"><span class="swatch" style="background:var(--series-2)"></span>Onduleur</span>
+          <span class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>Dissipateur</span>
         </div>
       </div>
     </div>
-    <div class="chart" id="chartPower" data-label="Puissance du pack et du chargeur dans le temps"></div>
+    <div class="chart" id="chartMotor" data-label="Températures du moteur arrière dans le temps">
+      <p class="chart-empty" id="motorEmpty" hidden>Aucune température du moteur reçue. Active les champs dans <b>Réglages → Avancé → Moteur arrière</b>.</p>
+    </div>
   </section>
 
 
@@ -212,6 +215,16 @@
       <button class="btn" type="button" id="btnCarLink">Créer un lien de configuration</button>
       <input type="text" id="carLink" readonly hidden>
       <p class="muted small" id="carLinkHelp" hidden>Ce lien contient ton token : traite-le comme un mot de passe. Ouvert dans le navigateur de l'auto, il enregistre le token et le VIN, puis s'efface de la barre d'adresse.</p>
+      <div class="dlg-section">
+        <h3>Moteur arrière : stator, onduleur, dissipateur</h3>
+        <p class="muted small">Sur une Model 3 LFP, la batterie est surtout chauffée par le moteur arrière. Tesla peut transmettre la température du stator, de l'onduleur et du dissipateur (DiStatorTempR, DiInverterTR, DiHeatsinkTR, 1 point / min) si ces champs sont ajoutés à la télémétrie de l'auto. Le stator s'affiche dans le graphique des cellules ; les trois valeurs dans la pastille « Moteur arr. ».</p>
+        <div class="row-btns">
+          <button class="btn" type="button" id="btnTelCheck">Vérifier</button>
+          <button class="btn" type="button" id="btnTelEnable">Activer ces 3 champs</button>
+          <button class="btn" type="button" id="btnTelStream">Tester le flux (60 s)</button>
+        </div>
+        <pre class="hist-report" id="telReport" hidden></pre>
+      </div>
       <button class="btn" type="button" id="btnHistTest">Tester l'historique Tessie</button>
       <pre class="hist-report" id="histReport" hidden></pre>
       <button class="btn" type="button" id="btnHistCopy" hidden>Copier le rapport</button>

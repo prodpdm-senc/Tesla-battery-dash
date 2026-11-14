@@ -1,17 +1,18 @@
-import { TessieClient, ApiError } from './tessie.js?v=14';
-import { Simulator } from './simulator.js?v=14';
-import { estimate, pickTemp, formatDuration } from './estimator.js?v=14';
-import { settings as settingsStore, history, observations, appendSample } from './store.js?v=14';
-import { createCharts } from './charts.js?v=14';
-import { Gauges } from './gauges.js?v=14';
-import { summarize, formatReport, statesToSamples, mergeSamples } from './history.js?v=14';
-import { SessionsView, demoHistory } from './sessionsView.js?v=14';
-import { detectHeatingEnd } from './events.js?v=14';
+import { TessieClient, ApiError } from './tessie.js?v=15';
+import { Simulator } from './simulator.js?v=15';
+import { estimate, pickTemp, formatDuration } from './estimator.js?v=15';
+import { settings as settingsStore, history, observations, appendSample } from './store.js?v=15';
+import { createCharts } from './charts.js?v=15';
+import { Gauges } from './gauges.js?v=15';
+import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=15';
+import { DRIVE_FIELDS, configuredFields, withStatorField, findDriveValues, streamProbe } from './telemetry.js?v=15';
+import { SessionsView, demoHistory } from './sessionsView.js?v=15';
+import { detectHeatingEnd } from './events.js?v=15';
 
 // Version de l'app. Le même numéro est ajouté à l'adresse de chaque fichier (?v=…)
 // pour forcer les navigateurs (Chrome iPhone, auto) à charger la nouvelle version.
 // À augmenter à chaque mise en ligne ; test/version.test.mjs vérifie la cohérence.
-export const APP_VERSION = '14';
+export const APP_VERSION = '15';
 
 const DEFAULTS = {
   vin: '',
@@ -57,7 +58,7 @@ const IS_CAR = document.documentElement.classList.contains('car');
 function init() {
   window.__appStarted = true;
   importSetupFromHash();
-  charts = createCharts({ tempEl: $('chartTemp'), powerEl: $('chartPower') });
+  charts = createCharts({ tempEl: $('chartTemp'), motorEl: $('chartMotor') });
   buildGauges();
   sessions = new SessionsView({
     fetchStates: (q) => {
@@ -342,6 +343,10 @@ const CHIPS = [
     on: (s) => s.chargingState === 'Charging' },
   { id: 'heater', label: 'Chauffage', on: (s) => s.heaterOn },
   { id: 'precond', label: 'Précond.', on: (s) => s.preconditioning },
+  // Stator / onduleur / dissipateur de l'unité arrière (si la télémétrie les transmet).
+  { id: 'drive', label: 'Moteur arr.', on: (s) => s.statorTemp != null && s.statorTemp >= 40,
+    text: (s) => (s.statorTemp == null && s.inverterTemp == null ? '—'
+      : `${fmt(s.statorTemp, 0)} · ${fmt(s.inverterTemp, 0)} · ${fmt(s.heatsinkTemp, 0)} °C`) },
 ];
 
 function chargingLabel(s) {
@@ -379,7 +384,9 @@ function renderCharts(est, last) {
   const domain = [now - rangeMs, now + future];
   // La projection suit la métrique choisie ; la bande montre l'étendue min–max.
   charts.temp.update(state.samples, domain, { band: ['tempMin', 'tempMax'], target, projection, yInclude: [target] });
-  charts.power.update(state.samples, domain, { yInclude: [0] });
+  const hasMotor = state.samples.some((x) => x.statorTemp != null || x.inverterTemp != null || x.heatsinkTemp != null);
+  $('motorEmpty').hidden = hasMotor;
+  charts.motor.update(state.samples, domain, {});
 }
 
 function renderObs() {
@@ -465,6 +472,9 @@ function bindUi() {
   });
   $('vinList').addEventListener('change', (e) => { form.elements.vin.value = e.target.value; });
   $('btnHistTest').addEventListener('click', testHistory);
+  $('btnTelCheck').addEventListener('click', telCheck);
+  $('btnTelEnable').addEventListener('click', telEnable);
+  $('btnTelStream').addEventListener('click', telStream);
   $('btnHistCopy').addEventListener('click', async () => {
     try { await navigator.clipboard.writeText($('histReport').textContent); formMsg('Rapport copié.'); }
     catch (e) { formMsg('Sélectionne le texte du rapport pour le copier.'); }
@@ -589,6 +599,92 @@ async function testHistory() {
     + `\nNavigateur : ${navigator.userAgent}`;
   $('btnHistCopy').hidden = false;
   formMsg(found ? 'Rapport prêt. Copie-le et envoie-le à Claude.' : 'Aucun point trouvé sur 7 jours. Copie quand même le rapport.');
+}
+
+// ───────────────────────── Télémétrie : stator du moteur arrière ─────────────────────────
+
+function telContext() {
+  const f = $('settingsForm').elements;
+  const token = f.token.value.trim(), vin = f.vin.value.trim().toUpperCase();
+  if (!token || !vin) { formMsg('Il faut le token et le VIN.', 'error'); return null; }
+  const c = new TessieClient({ token, baseUrl: f.baseUrl.value.trim() || DEFAULTS.baseUrl, timeoutMs: 30000 });
+  return { c, vin, token };
+}
+function telOut(text) {
+  const out = $('telReport');
+  out.hidden = false;
+  out.textContent = text;
+}
+
+/** Lecture seule : champs configurés, valeur « stator » dans l'état et dans l'historique. */
+async function telCheck() {
+  const ctx = telContext();
+  if (!ctx) return;
+  const { c, vin } = ctx;
+  telOut('Vérification…');
+  const lines = [`TÉLÉMÉTRIE STATOR (version ${APP_VERSION})`];
+  try {
+    const cfg = await c.telemetryConfig(vin);
+    const fields = configuredFields(cfg);
+    for (const fld of DRIVE_FIELDS) lines.push(`${fld} : ${fields.includes(fld) ? 'configuré ✓' : 'absent de la configuration ✗'}`);
+    lines.push(`Champs configurés (${fields.length}) : ${fields.join(', ') || '—'}`);
+    lines.push(`Structure de la configuration : ${shape(cfg, 3)}`);
+  } catch (e) { lines.push(`Configuration illisible : ${e.message}`); }
+  try {
+    const vals = findDriveValues(await c.state(vin));
+    lines.push(vals.length ? `Dans /state : ${vals.map((v) => `${v.path} = ${v.value}`).join(' ; ')}` : 'Dans /state : aucune valeur stator / onduleur / dissipateur.');
+  } catch (e) { lines.push(`/state illisible : ${e.message}`); }
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const json = await c.states(vin, `from=${now - 3600}&to=${now}&interval=1`);
+    const recs = findRecords(json);
+    const cols = recs[0] ? Object.keys(recs[0]).filter((k) => /stator|inverter|heatsink/i.test(k)) : [];
+    const n = statesToSamples(json).filter((x) => x.statorTemp != null).length;
+    lines.push(`Historique (1 h) : ${cols.length ? cols.join(', ') : 'aucune colonne stator / onduleur / dissipateur'} · ${n} point(s) avec une température de stator.`);
+  } catch (e) { lines.push(`Historique illisible : ${e.message}`); }
+  telOut(lines.join('\n'));
+}
+
+/** Ajoute DiStatorTempR à la configuration existante (sans retirer d'autres champs), après confirmation. */
+async function telEnable() {
+  const ctx = telContext();
+  if (!ctx) return;
+  const { c, vin } = ctx;
+  if (!window.confirm(`Ajouter ${DRIVE_FIELDS.join(', ')} (1 point / min) à la télémétrie de l’auto ?\nLes autres champs et réglages ne sont pas modifiés.`)) return;
+  telOut('Lecture de la configuration actuelle…');
+  try {
+    const cfg = await c.telemetryConfig(vin);
+    const have = configuredFields(cfg);
+    if (DRIVE_FIELDS.every((fld) => have.includes(fld))) { telOut(`${DRIVE_FIELDS.join(', ')} : déjà configurés. Rien envoyé.`); return; }
+    const body = withStatorField(cfg);
+    if (!body) {
+      telOut(`Configuration actuelle illisible ou vide : rien envoyé, pour ne pas remplacer celle de Tessie.\nStructure reçue : ${shape(cfg, 3)}`);
+      return;
+    }
+    const res = await c.setTelemetryConfig(vin, body);
+    telOut(`Envoyé : ${Object.keys(body.fields).length} champs, dont ${DRIVE_FIELDS.join(', ')}.\nRéponse : ${shape(res, 3)}\n`
+      + 'L’auto applique la nouvelle configuration à son prochain réveil. Clique sur « Vérifier » dans quelques minutes.');
+  } catch (e) {
+    telOut(`Échec : ${e.message}`);
+  }
+}
+
+/** Écoute le flux en direct de Tessie 60 s et rapporte les champs reçus. */
+async function telStream() {
+  const ctx = telContext();
+  if (!ctx) return;
+  telOut('Connexion au flux en direct…');
+  const r = await streamProbe({
+    vin: ctx.vin, token: ctx.token, ms: 60000,
+    onTick: (x) => telOut(`Écoute du flux (60 s)… ${x.opened ? 'connecté' : 'connexion'} · ${x.messages} message(s)`),
+  });
+  telOut([
+    `FLUX EN DIRECT (version ${APP_VERSION})`,
+    `Connexion : ${r.opened ? 'établie' : 'échec'}${r.error ? ` (${r.error})` : ''}${r.closeCode != null ? ` · fermée, code ${r.closeCode}` : ''}`,
+    `Messages reçus : ${r.messages}`,
+    `Moteur arrière : ${r.stator.length ? r.stator.slice(-6).join(' ; ') : 'aucune valeur'}`,
+    `Champs vus (${r.keys.length}) : ${r.keys.slice(0, 80).join(', ') || '—'}`,
+  ].join('\n'));
 }
 
 async function findVins() {
