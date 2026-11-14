@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { linearFit, estimate, pickTemp, formatDuration } from '../js/estimator.js';
 
-const MIN = 60_000;
+const MIN = 60000;
 const q = (v) => Math.round(v * 2) / 2; // quantification 0,5 °C comme le BMS
 
 function ramp({ start = 20, rate = 0.8, minutes = 10, everySec = 30, quantize = true } = {}) {
@@ -70,12 +70,12 @@ test('le lissage EMA amortit un changement brusque', () => {
 
 test('ignore les échantillons sans température', () => {
   const s = ramp();
-  s.push({ t: s.at(-1).t + 30_000 });
+  s.push({ t: s.at(-1).t + 30000 });
   assert.equal(estimate(s, { target: 40 }).status, 'heating');
 });
 
 test('formatDuration', () => {
-  assert.equal(formatDuration(45_000), '45 s');
+  assert.equal(formatDuration(45000), '45 s');
   assert.equal(formatDuration(12 * MIN), '12 min');
   assert.equal(formatDuration(65 * MIN), '1 h 05');
   assert.equal(formatDuration(Infinity), '—');

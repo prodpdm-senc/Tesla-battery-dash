@@ -35,6 +35,22 @@ Il n'est jamais envoyé ailleurs qu'à l'API configurée.
 
 Il faut confirmer que `api.tessie.com` accepte les appels directs depuis un navigateur. Si ce n'est pas le cas, la solution prévue est un petit proxy (par exemple un Cloudflare Worker) qui garde le token côté serveur. Il suffit ensuite de changer l'**URL de l'API** dans *Réglages → Avancé*, sans toucher au code.
 
+## Dans la Tesla
+
+Le navigateur de l'auto est un Chromium parfois ancien (version 79 sur certains véhicules), sans console de débogage. Le dashboard en tient compte :
+
+- **Code compatible ES2019** : aucune syntaxe récente (`?.`, `??`, méthodes `#privées`). GitHub Actions le vérifie à chaque push.
+- **Mode auto** : détecté automatiquement (« Tesla » dans le navigateur) ou forcé avec `?auto` dans l'URL. Le texte et les boutons sont plus grands, et la page s'affiche en 2 colonnes sans défiler sur l'écran paysage.
+- **Écran tactile** : toucher un graphique affiche les valeurs ; toucher ailleurs les masque.
+- **Erreurs à l'écran** : si la page ne démarre pas, un encadré rouge affiche l'erreur et la version du navigateur. Prends-le en photo pour le diagnostic.
+- **Token mémorisé** : dans l'auto, « Se souvenir » est coché par défaut pour ne pas retaper le token.
+
+### Entrer le token sans le retaper
+
+Dans *Réglages → Avancé*, **Créer un lien de configuration** produit une URL qui contient le token et le VIN. Ouverte dans le navigateur de l'auto, elle les enregistre puis s'efface de la barre d'adresse. Ce lien est un mot de passe : ne le partage pas.
+
+Sinon, tape le token une seule fois dans l'auto avec « Se souvenir » coché.
+
 ## Méthode de calcul de l'ETA
 
 `js/estimator.js` est un module pur, couvert par des tests (`npm test`).

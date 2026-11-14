@@ -8,6 +8,30 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
+<script>
+  // Script classique (sans module) : s'exécute même sur un navigateur ancien.
+  // Affiche les erreurs à l'écran, puisque le navigateur de l'auto n'a pas de console.
+  (function () {
+    var ua = navigator.userAgent;
+    if (/Tesla/i.test(ua) || /[?&]auto\b/.test(location.search)) document.documentElement.classList.add('car');
+    function show(msg) {
+      var el = document.getElementById('fatal');
+      if (!el) { document.addEventListener('DOMContentLoaded', function () { show(msg); }); return; }
+      el.hidden = false;
+      el.querySelector('pre').textContent += msg + '\n';
+    }
+    window.__showFatal = show;
+    window.addEventListener('error', function (e) {
+      if (e.message) show(e.message + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : ''));
+    });
+    window.addEventListener('unhandledrejection', function (e) { show('Promesse : ' + (e.reason && e.reason.message || e.reason)); });
+    window.addEventListener('load', function () {
+      setTimeout(function () {
+        if (!window.__appStarted) show("L'application n'a pas démarré. Navigateur : " + ua);
+      }, 3000);
+    });
+  })();
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <script type="module" src="js/app.js"></script>
 </head>
@@ -29,8 +53,13 @@
     </div>
   </header>
 
+  <div class="fatal" id="fatal" hidden>
+    <b>Problème de chargement.</b> Copie ou prends en photo ce message pour le diagnostic.
+    <pre></pre>
+  </div>
   <div class="banner" id="banner" hidden></div>
 
+  <div class="col col-left">
   <section class="hero" aria-label="Résumé">
     <div class="hero-main">
       <div class="label">Cible atteinte dans</div>
@@ -58,7 +87,10 @@
     </div>
   </section>
 
-  <section class="card">
+    <section class="tiles" id="tiles" aria-label="Valeurs en direct"></section>
+  </div>
+  <div class="col col-right">
+  <section class="card" id="cardTemp">
     <div class="card-head">
       <div>
         <h2>Température des modules</h2>
@@ -78,7 +110,7 @@
     <div class="chart" id="chartTemp" data-label="Température des modules de batterie dans le temps"></div>
   </section>
 
-  <section class="card">
+  <section class="card" id="cardPower">
     <div class="card-head">
       <div>
         <h2>Puissance</h2>
@@ -91,7 +123,8 @@
     <div class="chart" id="chartPower" data-label="Puissance du pack et du chargeur dans le temps"></div>
   </section>
 
-  <section class="tiles" id="tiles" aria-label="Valeurs en direct"></section>
+
+  </div>
 
   <section class="card" id="obsCard" hidden>
     <h2>Coupures du chauffage observées</h2>
@@ -146,6 +179,10 @@
       <label>URL de l'API (proxy éventuel)
         <input type="url" name="baseUrl" spellcheck="false">
       </label>
+      <button class="btn" type="button" id="btnCarLink">Créer un lien de configuration</button>
+      <input type="text" id="carLink" readonly hidden>
+      <p class="muted small" id="carLinkHelp" hidden>Ce lien contient ton token : traite-le comme un mot de passe. Ouvert dans le navigateur de l'auto, il enregistre le token et le VIN, puis s'efface de la barre d'adresse.</p>
+      <p class="muted small" id="uaInfo"></p>
       <button class="btn btn-danger" type="button" id="btnClearHist">Effacer l'historique local</button>
     </details>
 

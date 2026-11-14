@@ -10,7 +10,7 @@ export class ApiError extends Error {
 }
 
 export class TessieClient {
-  constructor({ token, baseUrl = 'https://api.tessie.com', timeoutMs = 15_000 }) {
+  constructor({ token, baseUrl = 'https://api.tessie.com', timeoutMs = 15000 }) {
     this.token = token;
     this.baseUrl = baseUrl.replace(/\/+$/, '');
     this.timeoutMs = timeoutMs;
@@ -79,13 +79,14 @@ const toMs = (t) => {
 
 /** Fusionne les réponses /battery et /state en un échantillon plat. */
 export function normalize(battery, state) {
-  const b = battery ?? {};
-  const cs = state?.charge_state ?? {};
-  const cl = state?.climate_state ?? {};
+  const st = state || {};
+  const b = battery || {};
+  const cs = st.charge_state || {};
+  const cl = st.climate_state || {};
   const voltage = num(b.pack_voltage, cs.pack_voltage);
   const current = num(b.pack_current, cs.pack_current);
   return {
-    t: toMs(b.timestamp) ?? toMs(cs.timestamp) ?? toMs(state?.timestamp) ?? Date.now(),
+    t: num(toMs(b.timestamp), toMs(cs.timestamp), toMs(st.timestamp), Date.now()),
     tempMin: num(b.module_temp_min, cs.module_temp_min),
     tempMax: num(b.module_temp_max, cs.module_temp_max),
     voltage,
@@ -97,14 +98,14 @@ export function normalize(battery, state) {
     chargerPowerKw: num(cs.charger_power),
     chargerVoltage: num(cs.charger_voltage),
     chargerCurrent: num(cs.charger_actual_current),
-    chargingState: cs.charging_state ?? null,
+    chargingState: cs.charging_state || null,
     fastCharger: bool(cs.fast_charger_present),
-    fastChargerType: cs.fast_charger_type ?? null,
+    fastChargerType: cs.fast_charger_type || null,
     heaterOn: bool(cs.battery_heater_on, cl.battery_heater),
     preconditioning: bool(cl.is_preconditioning, cs.preconditioning_enabled),
     outsideTemp: num(cl.outside_temp),
     minutesToFull: num(cs.minutes_to_full_charge),
     chargeLimit: num(cs.charge_limit_soc),
-    vehicleState: state?.state ?? null,
+    vehicleState: st.state || null,
   };
 }

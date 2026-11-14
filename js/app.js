@@ -16,10 +16,11 @@ const DEFAULTS = {
   demo: false,
 };
 const DEMO_INTERVAL_S = 5;
-const STALE_MS = 5 * 60_000;
-const MAX_BACKOFF_MS = 5 * 60_000;
+const STALE_MS = 5 * 60000;
+const MAX_BACKOFF_MS = 5 * 60000;
 
 const $ = (id) => document.getElementById(id);
+const dig = (o, path) => path.split('.').reduce((a, k) => (a == null ? undefined : a[k]), o);
 const fmt = (v, d = 1) => (v == null || !Number.isFinite(v) ? '—' : v.toFixed(d));
 const clock = (t) => new Date(t).toLocaleTimeString('fr-CA', { hour: '2-digit', minute: '2-digit' });
 
@@ -40,7 +41,11 @@ let charts;
 
 // ───────────────────────── Démarrage ─────────────────────────
 
+const IS_CAR = document.documentElement.classList.contains('car');
+
 function init() {
+  window.__appStarted = true;
+  importSetupFromHash();
   charts = createCharts({ tempEl: $('chartTemp'), powerEl: $('chartPower') });
   buildTiles();
   bindUi();
@@ -86,6 +91,34 @@ function stop() {
   clearTimeout(state.timer);
   state.timer = null;
   state.gen++;
+}
+
+/**
+ * Lien de configuration : #setup=<base64 JSON {token, vin}>.
+ * Le fragment (#) n'est jamais envoyé au serveur ; on l'efface tout de suite de l'URL.
+ */
+function importSetupFromHash() {
+  const m = /[#&]setup=([^&]+)/.exec(location.hash);
+  if (!m) return;
+  try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { location.hash = ''; }
+  try {
+    const data = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
+    if (data.token) state.s.token = String(data.token).trim();
+    if (data.vin) state.s.vin = String(data.vin).trim().toUpperCase();
+    if (data.target) state.s.target = Number(data.target) || state.s.target;
+    state.s.rememberToken = true;
+    state.s.demo = false;
+    settingsStore.save(state.s);
+    setTimeout(() => banner('info', 'Configuration importée et enregistrée sur cet appareil.'), 0);
+  } catch (e) {
+    setTimeout(() => banner('error', 'Lien de configuration invalide.'), 0);
+  }
+}
+
+function buildSetupLink(token, vin, target) {
+  const json = JSON.stringify({ token, vin, target });
+  const b64 = btoa(unescape(encodeURIComponent(json)));
+  return `${location.origin}${location.pathname}#setup=${encodeURIComponent(b64)}`;
 }
 
 // ───────────────────────── Boucle de lecture ─────────────────────────
@@ -227,7 +260,7 @@ function renderHero(est, last) {
 }
 
 function metricLabel() {
-  return { min: 'module min', avg: 'moyenne', max: 'module max' }[state.s.metric] ?? 'module min';
+  return { min: 'module min', avg: 'moyenne', max: 'module max' }[state.s.metric] || 'module min';
 }
 
 const TILES = [
@@ -246,7 +279,7 @@ const TILES = [
 
 function chargingLabel(s) {
   const map = { Charging: 'En charge', Complete: 'Terminée', Stopped: 'Arrêtée', Disconnected: 'Débranchée', Starting: 'Démarrage', NoPower: 'Sans courant' };
-  return map[s.chargingState] ?? s.chargingState ?? '—';
+  return map[s.chargingState] || s.chargingState || '—';
 }
 
 function buildTiles() {
@@ -273,8 +306,8 @@ function renderTiles(s) {
 }
 
 function renderCharts(est, last) {
-  const rangeMs = state.s.rangeMin * 60_000;
-  const now = Math.max(Date.now(), last?.t ?? 0);
+  const rangeMs = state.s.rangeMin * 60000;
+  const now = Math.max(Date.now(), last ? last.t : 0);
   const target = +state.s.target;
   let projection = null;
   let future = 0;
@@ -322,7 +355,8 @@ function bindUi() {
     if (state.s.demo) startDemo(); else startLive();
   });
   $('rangeSeg').addEventListener('click', (e) => {
-    const m = e.target.closest('button')?.dataset.min;
+    const btn = e.target.closest('button');
+    const m = btn && btn.dataset.min;
     if (!m) return;
     state.s.rangeMin = +m;
     settingsStore.save(state.s);
@@ -330,7 +364,8 @@ function bindUi() {
     render();
   });
   $('obsList').addEventListener('click', (e) => {
-    const i = e.target.closest('button')?.dataset.obs;
+    const btn = e.target.closest('button');
+    const i = btn ? btn.dataset.obs : null;
     const o = i != null ? state.obs[+i] : null;
     if (!o) return;
     const v = pickTemp(o, state.s.metric);
@@ -349,6 +384,17 @@ function bindUi() {
     if ($('settings').returnValue === 'save') saveSettings(new FormData(form));
   });
   $('btnFindVin').addEventListener('click', findVins);
+  $('btnCarLink').addEventListener('click', async () => {
+    const f = form.elements;
+    const token = f.token.value.trim(), vin = f.vin.value.trim().toUpperCase();
+    if (!token || !vin) { formMsg('Il faut le token et le VIN pour créer le lien.', 'error'); return; }
+    const link = buildSetupLink(token, vin, Number(f.target.value) || state.s.target);
+    const out = $('carLink');
+    out.value = link; out.hidden = false; $('carLinkHelp').hidden = false;
+    out.focus(); out.select();
+    try { await navigator.clipboard.writeText(link); formMsg('Lien copié.'); }
+    catch (e) { formMsg('Sélectionne et copie le lien ci-dessous.'); }
+  });
   $('vinList').addEventListener('change', (e) => { form.elements.vin.value = e.target.value; });
   $('btnClearHist').addEventListener('click', () => {
     if (!state.s.vin) return;
@@ -366,16 +412,18 @@ function syncRangeButtons() {
 
 function openSettings(message, focus) {
   const f = $('settingsForm').elements;
-  f.token.value = state.s.token ?? '';
-  f.rememberToken.checked = !!state.s.rememberToken;
-  f.vin.value = state.s.vin ?? '';
+  f.token.value = state.s.token || '';
+  f.rememberToken.checked = !!state.s.rememberToken || (IS_CAR && !state.s.token);
+  $('uaInfo').textContent = `Navigateur : ${navigator.userAgent}`;
+  $('carLink').hidden = true; $('carLinkHelp').hidden = true;
+  f.vin.value = state.s.vin || '';
   f.target.value = state.s.target;
   f.interval.value = state.s.interval;
   f.metric.value = state.s.metric;
   f.windowMin.value = state.s.windowMin;
   f.baseUrl.value = state.s.baseUrl;
   $('vinList').hidden = true;
-  formMsg(message ?? '', message ? 'error' : null);
+  formMsg(message || '', message ? 'error' : null);
   if (!$('settings').open) $('settings').showModal();
   if (focus) f[focus].focus();
 }
@@ -384,9 +432,9 @@ function saveSettings(fd) {
   const clamp = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
   const prevVin = state.s.vin, prevToken = state.s.token, prevBase = state.s.baseUrl;
   Object.assign(state.s, {
-    token: String(fd.get('token') ?? '').trim(),
+    token: String(fd.get('token') || '').trim(),
     rememberToken: fd.get('rememberToken') === 'on',
-    vin: String(fd.get('vin') ?? '').trim().toUpperCase(),
+    vin: String(fd.get('vin') || '').trim().toUpperCase(),
     target: clamp(fd.get('target'), 0, 70, DEFAULTS.target),
     interval: clamp(fd.get('interval'), 10, 600, DEFAULTS.interval),
     metric: ['min', 'avg', 'max'].includes(fd.get('metric')) ? fd.get('metric') : 'min',
@@ -415,9 +463,9 @@ async function findVins() {
   try {
     const c = new TessieClient({ token, baseUrl: f.baseUrl.value.trim() || DEFAULTS.baseUrl });
     const res = await c.vehicles();
-    const list = (res?.results ?? []).map((v) => ({
+    const list = ((res && res.results) || []).map((v) => ({
       vin: v.vin,
-      name: v.last_state?.vehicle_state?.vehicle_name || v.last_state?.display_name || v.vin,
+      name: dig(v, 'last_state.vehicle_state.vehicle_name') || dig(v, 'last_state.display_name') || v.vin,
     })).filter((v) => v.vin);
     if (!list.length) { formMsg('Aucun véhicule actif trouvé sur ce compte.', 'error'); return; }
     const sel = $('vinList');

@@ -3,7 +3,7 @@
 
 /* global d3 */
 
-const M = { top: 12, right: 56, bottom: 24, left: 40 };
+const M = { top: 12, right: 72, bottom: 24, left: 40 };
 const fmtTime = (d) => d3.timeFormat('%H:%M')(d);
 
 function css(name) {
@@ -34,8 +34,11 @@ class TimeChart {
     this.tip = d3.select(el).append('div').attr('class', 'tooltip').attr('hidden', true);
     this.overlay = this.svg.append('rect').attr('class', 'overlay');
     this.overlay
-      .on('pointermove', (e) => this.#hover(e))
-      .on('pointerleave', () => { this.gHover.style('display', 'none'); this.tip.attr('hidden', true); });
+      .on('pointermove', (e) => this._hover(e))
+      .on('pointerdown', (e) => this._hover(e)) // écran tactile : un toucher affiche les valeurs
+      .on('pointerleave', (e) => { if (e.pointerType === 'mouse') this._hideHover(); });
+    // Sur écran tactile, toucher ailleurs masque l'infobulle.
+    document.addEventListener('pointerdown', (e) => { if (!el.contains(e.target)) this._hideHover(); });
     new ResizeObserver(() => this.render()).observe(el);
   }
 
@@ -58,7 +61,7 @@ class TimeChart {
 
     const vals = [];
     for (const d of data) for (const s of this.series) if (d[s.key] != null) vals.push(d[s.key]);
-    for (const v of this.extras.yInclude ?? []) if (v != null) vals.push(v);
+    for (const v of this.extras.yInclude || []) if (v != null) vals.push(v);
     let [lo, hi] = vals.length ? d3.extent(vals) : [0, 1];
     if (hi - lo < this.yMinSpan) { const c = (hi + lo) / 2; lo = c - this.yMinSpan / 2; hi = c + this.yMinSpan / 2; }
     const pad = (hi - lo) * 0.08;
@@ -124,15 +127,20 @@ class TimeChart {
     }
     this.gLabels.selectAll('text').data(labels, (d) => d.s.key).join('text')
       .attr('x', last ? x(last.t) + 6 : 0).attr('y', (d) => d.y).attr('dy', '0.32em')
-      .text((d) => d.s.short ?? d.s.label);
+      .text((d) => d.s.short || d.s.label);
 
     this.overlay.attr('x', M.left).attr('y', M.top).attr('width', iw).attr('height', ih);
     this.gHover.select('line.crosshair').attr('y1', M.top).attr('y2', M.top + ih);
-    this.svg.attr('aria-label', this.el.dataset.label ?? '');
+    this.svg.attr('aria-label', this.el.dataset.label || '');
   }
 
-  #hover(e) {
-    if (!this.visible?.length) return;
+  _hideHover() {
+    this.gHover.style('display', 'none');
+    this.tip.attr('hidden', true);
+  }
+
+  _hover(e) {
+    if (!this.visible || !this.visible.length) return;
     const [mx] = d3.pointer(e, this.svg.node());
     const t = this.x.invert(mx).getTime();
     const i = d3.bisector((d) => d.t).center(this.visible, t);

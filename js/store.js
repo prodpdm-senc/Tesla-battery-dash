@@ -2,7 +2,7 @@
 // en navigation privée ou si le stockage est bloqué, l'app fonctionne quand même.
 
 const PREFIX = 'tbd:';
-const MAX_AGE_MS = 12 * 3_600_000;
+const MAX_AGE_MS = 12 * 3600000;
 const MAX_SAMPLES = 4000;
 
 function read(key, fallback) {
@@ -25,7 +25,7 @@ export const settings = {
     // Le token est soit en localStorage (« se souvenir »), soit en sessionStorage.
     let token = read('token', null);
     if (!token) { try { token = sessionStorage.getItem(PREFIX + 'token'); } catch { /* */ } }
-    return { ...s, token: token ?? '' };
+    return { ...s, token: token || '' };
   },
   save(s) {
     const { token, ...rest } = s;
