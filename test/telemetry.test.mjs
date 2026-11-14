@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { configuredFields, withStatorField, findStatorValues, pickStatorTemp, findDriveValues } from '../js/telemetry.js';
+import { configuredFields, withStatorField, findStatorValues, pickStatorTemp, findDriveValues, configFlags } from '../js/telemetry.js';
 
 const tessieConfig = {
   synced: true,
@@ -21,8 +21,8 @@ test('withStatorField ajoute le champ sans rien retirer', () => {
   const body = withStatorField(tessieConfig);
   assert.deepEqual(Object.keys(body.fields), ['BatteryLevel', 'Location', 'DiStatorTempR', 'DiInverterTR', 'DiHeatsinkTR']);
   assert.deepEqual(body.fields.DiStatorTempR, { interval_seconds: 60 });
-  assert.deepEqual(body.alert_types, ['service']);
-  assert.equal(body.hostname, 'telemetry.example');
+  // Seulement { fields } : le serveur, le certificat, l'expiration, etc. ne sont jamais renvoyés.
+  assert.deepEqual(Object.keys(body), ['fields']);
   assert.equal(tessieConfig.config.fields.DiStatorTempR, undefined); // original intact
 });
 
@@ -51,4 +51,9 @@ test('onduleur et dissipateur arrière', () => {
   assert.equal(pickStatorTemp(st, 'heatsink'), 41.5);
   assert.equal(pickStatorTemp(st), 70);
   assert.equal(findDriveValues(st).length, 5);
+});
+
+test('configFlags : seulement les indicateurs simples', () => {
+  const f = configFlags({ synced: true, limit_reached: false, key_paired: true, config: { ca: 'secret' }, last_signal_at: 1794661659 });
+  assert.deepEqual(f, { synced: true, limit_reached: false, key_paired: true, last_signal_at: 1794661659 });
 });

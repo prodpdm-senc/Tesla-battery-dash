@@ -1,18 +1,18 @@
-import { TessieClient, ApiError } from './tessie.js?v=15';
-import { Simulator } from './simulator.js?v=15';
-import { estimate, pickTemp, formatDuration } from './estimator.js?v=15';
-import { settings as settingsStore, history, observations, appendSample } from './store.js?v=15';
-import { createCharts } from './charts.js?v=15';
-import { Gauges } from './gauges.js?v=15';
-import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=15';
-import { DRIVE_FIELDS, configuredFields, withStatorField, findDriveValues, streamProbe } from './telemetry.js?v=15';
-import { SessionsView, demoHistory } from './sessionsView.js?v=15';
-import { detectHeatingEnd } from './events.js?v=15';
+import { TessieClient, ApiError } from './tessie.js?v=16';
+import { Simulator } from './simulator.js?v=16';
+import { estimate, pickTemp, formatDuration } from './estimator.js?v=16';
+import { settings as settingsStore, history, observations, appendSample } from './store.js?v=16';
+import { createCharts } from './charts.js?v=16';
+import { Gauges } from './gauges.js?v=16';
+import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=16';
+import { DRIVE_FIELDS, configuredFields, withStatorField, findDriveValues, streamProbe, configFlags } from './telemetry.js?v=16';
+import { SessionsView, demoHistory } from './sessionsView.js?v=16';
+import { detectHeatingEnd } from './events.js?v=16';
 
 // Version de l'app. Le même numéro est ajouté à l'adresse de chaque fichier (?v=…)
 // pour forcer les navigateurs (Chrome iPhone, auto) à charger la nouvelle version.
 // À augmenter à chaque mise en ligne ; test/version.test.mjs vérifie la cohérence.
-export const APP_VERSION = '15';
+export const APP_VERSION = '16';
 
 const DEFAULTS = {
   vin: '',
@@ -628,6 +628,8 @@ async function telCheck() {
     const fields = configuredFields(cfg);
     for (const fld of DRIVE_FIELDS) lines.push(`${fld} : ${fields.includes(fld) ? 'configuré ✓' : 'absent de la configuration ✗'}`);
     lines.push(`Champs configurés (${fields.length}) : ${fields.join(', ') || '—'}`);
+    const flags = configFlags(cfg);
+    lines.push(`Indicateurs : ${Object.keys(flags).map((k) => `${k} = ${flags[k]}`).join(' · ') || '—'}`);
     lines.push(`Structure de la configuration : ${shape(cfg, 3)}`);
   } catch (e) { lines.push(`Configuration illisible : ${e.message}`); }
   try {
@@ -661,8 +663,12 @@ async function telEnable() {
       telOut(`Configuration actuelle illisible ou vide : rien envoyé, pour ne pas remplacer celle de Tessie.\nStructure reçue : ${shape(cfg, 3)}`);
       return;
     }
+    if (configFlags(cfg).limit_reached === true) {
+      telOut('Tessie indique limit_reached = true : la limite de télémétrie semble atteinte. Rien envoyé.');
+      return;
+    }
     const res = await c.setTelemetryConfig(vin, body);
-    telOut(`Envoyé : ${Object.keys(body.fields).length} champs, dont ${DRIVE_FIELDS.join(', ')}.\nRéponse : ${shape(res, 3)}\n`
+    telOut(`Envoyé : { fields } avec ${Object.keys(body.fields).length} champs (les ${configuredFields(cfg).length} actuels + ${DRIVE_FIELDS.join(', ')}).\nRéponse : ${shape(res, 3)}\n`
       + 'L’auto applique la nouvelle configuration à son prochain réveil. Clique sur « Vérifier » dans quelques minutes.');
   } catch (e) {
     telOut(`Échec : ${e.message}`);

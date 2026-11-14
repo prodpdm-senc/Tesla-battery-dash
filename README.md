@@ -41,7 +41,7 @@ Il faut confirmer que `api.tessie.com` accepte les appels directs depuis un navi
 Tesla peut transmettre `DiStatorTempR`, `DiInverterTR` et `DiHeatsinkTR` (stator, onduleur, dissipateur arrière ; 1 point / min au mieux, logiciel 2024.26+), mais ils ne font pas partie de la configuration de télémétrie par défaut de Tessie. Dans *Réglages → Avancé → Moteur arrière* :
 
 - **Vérifier** (lecture seule) : champs configurés, valeurs trouvées dans l'état et dans l'historique de la dernière heure.
-- **Activer ces 3 champs** : lit la configuration actuelle et y **ajoute** les 3 champs (aux 60 s), sans retirer ni modifier les autres. Si la configuration est illisible, rien n'est envoyé. Une confirmation est demandée.
+- **Activer ces 3 champs** : lit la configuration actuelle et envoie seulement `{ fields }` : tous les champs actuels inchangés, plus les 3 champs du moteur (aux 60 s). Le reste de la configuration (serveur, certificat, expiration, identifiants) appartient à Tessie et n'est jamais renvoyé. Rien n'est envoyé si la configuration est illisible ou si Tessie indique `limit_reached`. Une confirmation est demandée.
 - **Tester le flux (60 s)** : écoute le flux en direct de Tessie et liste les champs reçus.
 
 L'unité de ces températures n'est pas documentée officiellement (°C supposé) : à vérifier avec les premières valeurs réelles.
