@@ -65,7 +65,8 @@ export class Gauges {
       const lo = Math.min(it.zeroT, t), hi = Math.max(it.zeroT, t);
       it.fill.style.bottom = `${lo * 100}%`;
       it.fill.style.height = `${(hi - lo) * 100}%`;
-      it.fill.setAttribute('data-dir', d.signed && ok && v < 0 ? 'neg' : 'pos');
+      // Vert (recharge) seulement pour les grandeurs électriques ; ailleurs, bleu dans les deux sens.
+      it.fill.setAttribute('data-dir', d.signed && d.colorBySign !== false && ok && v < 0 ? 'neg' : 'pos');
       it.box.setAttribute('aria-valuenow', ok ? String(v) : '');
       it.box.toggleAttribute('data-out', ok && (v < d.min || v > d.max));
 
