@@ -278,7 +278,7 @@ const GAUGES = [
     sub: (s) => (s.energyKwh != null ? `${fmt(s.energyKwh)} kWh` : '') },
   { id: 'charger', label: 'Chargeur', unit: 'kW', min: 0, max: 250, get: (s) => s.chargerPowerKw,
     sub: (s) => (s.chargerVoltage || s.chargerCurrent ? `${fmt(s.chargerVoltage, 0)} V · ${fmt(s.chargerCurrent, 0)} A` : '') },
-  { id: 'outside', label: 'Extérieur', unit: '°C', min: -30, max: 40, decimals: 1, signed: true, get: (s) => s.outsideTemp },
+  { id: 'outside', label: 'Extérieur', unit: '°C', min: -30, max: 40, decimals: 1, signed: true, colorBySign: false, get: (s) => s.outsideTemp },
 ];
 
 const CHIPS = [

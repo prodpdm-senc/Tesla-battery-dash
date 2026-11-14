@@ -6,7 +6,7 @@
 <title>Batterie Tesla — Dashboard</title>
 <meta name="description" content="Température de batterie, préconditionnement et recharge rapide en direct via Tessie.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <script>
   // Script classique (sans module) : s'exécute même sur un navigateur ancien.
@@ -74,7 +74,7 @@
     </div>
     <div class="hero-stats">
       <div class="stat">
-        <div class="label">Batterie (min / max)</div>
+        <div class="label">Batterie min / max</div>
         <div class="stat-value"><span id="tNow">—</span><span class="unit">°C</span></div>
         <div class="stat-sub" id="tRange">—</div>
       </div>
@@ -95,12 +95,12 @@
 
   <section class="card" id="cardTemp">
     <div class="card-head">
-      <div>
+      <div class="card-title">
         <h2>Température des modules</h2>
         <div class="legend">
           <span class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>Module min</span>
           <span class="legend-item"><span class="swatch" style="background:var(--series-2)"></span>Module max</span>
-          <span class="legend-item"><span class="swatch swatch-dash"></span>Cible / projection</span>
+          <span class="legend-item"><span class="swatch swatch-dash"></span>Cible</span>
         </div>
       </div>
       <div class="seg" role="group" aria-label="Fenêtre de temps" id="rangeSeg">
@@ -115,7 +115,7 @@
 
   <section class="card" id="cardPower">
     <div class="card-head">
-      <div>
+      <div class="card-title">
         <h2>Puissance</h2>
         <div class="legend">
           <span class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>Pack (V × I)</span>

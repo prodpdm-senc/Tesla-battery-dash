@@ -3,7 +3,8 @@
 
 /* global d3 */
 
-const M = { top: 12, right: 72, bottom: 24, left: 40 };
+// Marges identiques pour les deux graphiques : les axes de temps s'alignent.
+const M = { top: 24, right: 62, bottom: 22, left: 40 };
 const fmtTime = (d) => d3.timeFormat('%H:%M')(d);
 
 function css(name) {
@@ -15,8 +16,12 @@ class TimeChart {
    * @param {HTMLElement} el
    * @param {{key:string,label:string,color:string,unit:string,fmt?:(v:number)=>string}[]} series
    */
-  constructor(el, { series, unit, height = 220, yMinSpan = 5 }) {
+  constructor(el, { series, unit, height = 220, yMinSpan = 5, showX = true, area = null, zero = false, valueLabels = true }) {
     this.el = el;
+    this.showX = showX;       // le graphique du haut cache ses heures (même axe que celui du bas)
+    this.areaKey = area;      // série remplie jusqu'à zéro
+    this.zero = zero;         // ligne du zéro marquée
+    this.valueLabels = valueLabels;
     this.series = series;
     this.unit = unit;
     this.height = height;
@@ -24,11 +29,13 @@ class TimeChart {
     this.extras = {};
     this.svg = d3.select(el).append('svg').attr('class', 'chart-svg').attr('role', 'img');
     this.gGrid = this.svg.append('g').attr('class', 'grid');
+    this.gGridX = this.svg.append('g').attr('class', 'grid-x');
+    this.unitLabel = this.svg.append('text').attr('class', 'unit-label').attr('text-anchor', 'end').text(unit);
     this.gX = this.svg.append('g').attr('class', 'axis axis-x');
     this.gY = this.svg.append('g').attr('class', 'axis axis-y');
     this.gExtra = this.svg.append('g');
     this.gLines = this.svg.append('g');
-    this.gLabels = this.svg.append('g').attr('class', 'direct-labels');
+    this.gLabels = this.svg.append('g');
     this.gHover = this.svg.append('g').attr('class', 'hover').style('display', 'none');
     this.gHover.append('line').attr('class', 'crosshair');
     this.tip = d3.select(el).append('div').attr('class', 'tooltip').attr('hidden', true);
@@ -58,7 +65,8 @@ class TimeChart {
     // Taille lue sur le conteneur (fixée par le CSS) : le SVG suit la fenêtre sans jamais l'élargir.
     const w = Math.max(200, this.el.clientWidth);
     const h = Math.max(80, this.el.clientHeight || this.height);
-    const iw = w - M.left - M.right, ih = h - M.top - M.bottom;
+    const mb = this.showX ? M.bottom : 6;
+    const iw = w - M.left - M.right, ih = h - M.top - mb;
     this.svg.attr('viewBox', `0 0 ${w} ${h}`);
 
     const data = this.data.filter((d) => d.t >= this.domain[0]);
@@ -74,9 +82,14 @@ class TimeChart {
     this.x = x; this.y = y; this.visible = data;
 
     const ticksX = Math.max(2, Math.floor(iw / 90));
-    const ticksY = Math.max(2, Math.min(5, Math.floor(ih / 32)));
+    const ticksY = Math.max(2, Math.min(5, Math.floor(ih / 36)));
     this.gX.attr('transform', `translate(0,${M.top + ih})`)
-      .call(d3.axisBottom(x).ticks(ticksX).tickFormat(fmtTime).tickSizeOuter(0));
+      .call(d3.axisBottom(x).ticks(ticksX).tickFormat(fmtTime).tickSize(0).tickPadding(8));
+    this.gX.style('display', this.showX ? null : 'none');
+    this.gGridX.attr('transform', `translate(0,${M.top + ih})`)
+      .call(d3.axisBottom(x).ticks(ticksX).tickSize(-ih).tickFormat(''));
+    this.gGridX.select('.domain').remove();
+    this.unitLabel.attr('x', M.left - 6).attr('y', M.top - 13);
     this.gY.attr('transform', `translate(${M.left},0)`)
       .call(d3.axisLeft(y).ticks(ticksY).tickSize(0).tickPadding(6));
     this.gY.select('.domain').remove();
@@ -84,8 +97,21 @@ class TimeChart {
       .call(d3.axisLeft(y).ticks(ticksY).tickSize(-iw).tickFormat(''));
     this.gGrid.select('.domain').remove();
 
-    // Zone min–max (bande) si demandée.
     this.gExtra.selectAll('*').remove();
+    // Ligne du zéro (puissance : séparation décharge / recharge).
+    if (this.zero && y.domain()[0] < 0 && y.domain()[1] > 0) {
+      this.gExtra.append('line').attr('class', 'zero-line')
+        .attr('x1', M.left).attr('x2', M.left + iw).attr('y1', y(0)).attr('y2', y(0));
+    }
+    // Surface remplie jusqu'à zéro sous la série principale.
+    if (this.areaKey) {
+      const s0 = this.series.find((s) => s.key === this.areaKey);
+      const base = y(Math.max(y.domain()[0], Math.min(y.domain()[1], 0)));
+      const area = d3.area().defined((d) => d[this.areaKey] != null).curve(d3.curveMonotoneX)
+        .x((d) => x(d.t)).y0(base).y1((d) => y(d[this.areaKey]));
+      this.gExtra.append('path').datum(data).attr('class', 'area').attr('fill', css(s0.color)).attr('d', area);
+    }
+    // Zone min–max (bande) si demandée.
     if (this.extras.band) {
       const [a, b] = this.extras.band;
       const area = d3.area().defined((d) => d[a] != null && d[b] != null)
@@ -99,7 +125,7 @@ class TimeChart {
         .attr('x1', M.left).attr('x2', M.left + iw).attr('y1', ty).attr('y2', ty);
       this.gExtra.append('text').attr('class', 'target-label')
         .attr('x', M.left + iw + 4).attr('y', ty).attr('dy', '0.32em')
-        .text(`Cible ${this.extras.target}°`);
+        .text(`Cible ${this.extras.target} °C`);
     }
     // Projection pointillée vers la cible.
     if (this.extras.projection) {
@@ -121,19 +147,22 @@ class TimeChart {
       .attr('d', (s) => d3.line().defined((d) => d[s.key] != null)
         .x((d) => x(d.t)).y((d) => y(d[s.key])).curve(d3.curveMonotoneX)(data));
 
-    // Libellés directs à la fin de chaque série (≤ 4 séries).
+    // Point à la fin de chaque série + valeur actuelle à droite.
     const last = data[data.length - 1];
-    // Masqués quand la projection part du même point (la légende suffit).
-    const labels = this.series
-      .filter((s) => !this.extras.projection && last && last[s.key] != null)
-      .map((s) => ({ s, y: y(last[s.key]) }))
-      .sort((a, b) => a.y - b.y);
+    const ends = this.series.filter((s) => last && last[s.key] != null)
+      .map((s) => ({ s, cy: y(last[s.key]), y: y(last[s.key]) }));
+    this.gLabels.selectAll('circle').data(ends, (d) => d.s.key).join('circle')
+      .attr('class', 'end-dot').attr('r', 4).attr('cx', last ? x(last.t) : 0).attr('cy', (d) => d.cy)
+      .attr('fill', (d) => css(d.s.color));
+    // Valeurs masquées quand la projection part du même point (elles sont dans le résumé).
+    const labels = this.valueLabels && !this.extras.projection ? ends.slice().sort((a, b) => a.y - b.y) : [];
     for (let i = 1; i < labels.length; i++) {
-      if (labels[i].y - labels[i - 1].y < 13) labels[i].y = labels[i - 1].y + 13;
+      if (labels[i].y - labels[i - 1].y < 14) labels[i].y = labels[i - 1].y + 14;
     }
     this.gLabels.selectAll('text').data(labels, (d) => d.s.key).join('text')
-      .attr('x', last ? x(last.t) + 6 : 0).attr('y', (d) => d.y).attr('dy', '0.32em')
-      .text((d) => d.s.short || d.s.label);
+      .attr('class', 'value-label')
+      .attr('x', last ? Math.min(x(last.t) + 9, M.left + iw + 6) : 0).attr('y', (d) => d.y).attr('dy', '0.32em')
+      .text((d) => (d.s.fmt ? d.s.fmt(last[d.s.key]) : last[d.s.key].toFixed(1)));
 
     this.overlay.attr('x', M.left).attr('y', M.top).attr('width', iw).attr('height', ih);
     this.gHover.select('line.crosshair').attr('y1', M.top).attr('y2', M.top + ih);
@@ -184,14 +213,14 @@ export function createCharts({ tempEl, powerEl }) {
     return { temp: noop, power: noop };
   }
   const temp = new TimeChart(tempEl, {
-    unit: '°C', height: 260, yMinSpan: 10,
+    unit: '°C', height: 260, yMinSpan: 10, showX: false,
     series: [
       { key: 'tempMax', label: 'Module max', short: 'max', color: '--series-2', unit: '°C' },
       { key: 'tempMin', label: 'Module min', short: 'min', color: '--series-1', unit: '°C' },
     ],
   });
   const power = new TimeChart(powerEl, {
-    unit: 'kW', height: 180, yMinSpan: 10,
+    unit: 'kW', height: 180, yMinSpan: 10, area: 'powerKw', zero: true,
     series: [
       { key: 'powerKw', label: 'Pack (V × I)', short: 'pack', color: '--series-1', unit: 'kW' },
       { key: 'chargerPowerKw', label: 'Chargeur', short: 'chargeur', color: '--series-3', unit: 'kW', fmt: (v) => v.toFixed(0) },
