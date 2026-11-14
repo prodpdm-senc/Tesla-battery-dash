@@ -8,12 +8,12 @@
 //   2. Lissage exponentiel (EMA) de la pente entre deux échantillons.
 //   3. ETA = (T_cible − T_ajustée) / pente, avec une plage ± 1 erreur-type.
 
-const MIN = 60_000;
+const MIN = 60000;
 
 /** Température retenue pour un échantillon selon la métrique choisie. */
 export function pickTemp(sample, metric = 'min') {
-  const lo = sample?.tempMin;
-  const hi = sample?.tempMax;
+  const lo = sample ? sample.tempMin : undefined;
+  const hi = sample ? sample.tempMax : undefined;
   const ok = (v) => typeof v === 'number' && Number.isFinite(v);
   if (metric === 'max') return ok(hi) ? hi : ok(lo) ? lo : null;
   if (metric === 'avg') {

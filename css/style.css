@@ -62,19 +62,20 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 a { color: var(--accent); }
-.container { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.container { max-width: 880px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 .muted { color: var(--text-muted); }
 .small { font-size: 12px; }
 
 /* En-tête */
-.header { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.header { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; }
+.header > * { margin-top: 8px; }
 h1 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 30px; letter-spacing: -0.5px; }
 h2 { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px; }
 .subtitle { color: var(--text-secondary); font-size: 12px; margin-top: 2px; }
-.header-actions { display: flex; gap: 8px; }
+.header-actions { display: grid; grid-auto-flow: column; gap: 8px; }
 
-.status { display: flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
-.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
+.status { display: flex; align-items: center; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+.status-dot { margin-right: 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
 .status[data-state="live"] { color: var(--good); }
 .status[data-state="live"] .status-dot { background: var(--good); animation: pulse 2s ease-in-out infinite; }
 .status[data-state="demo"] { color: var(--accent); }
@@ -120,9 +121,11 @@ h2 { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px; }
 
 /* Cartes et graphiques */
 .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
-.card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
-.legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; font-size: 11px; color: var(--text-secondary); }
-.legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.card-head { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; margin-bottom: 8px; }
+.card-head > * { margin-top: 4px; }
+.legend { display: flex; flex-wrap: wrap; margin-top: 6px; font-size: 11px; color: var(--text-secondary); }
+.legend-item { display: inline-flex; align-items: center; margin-right: 14px; }
+.legend-item .swatch { margin-right: 6px; }
 .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
 .swatch-dash { width: 14px; height: 0; border-top: 2px dashed var(--target); border-radius: 0; }
 
@@ -152,7 +155,9 @@ h2 { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px; }
   padding: 8px 10px; font-size: 11px; box-shadow: 0 6px 20px rgb(0 0 0 / 0.15);
 }
 .tip-time { color: var(--text-muted); margin-bottom: 4px; }
-.tip-row { display: flex; align-items: center; gap: 6px; }
+.tip-row { display: flex; align-items: center; }
+.tip-row .swatch { margin-right: 6px; }
+.tip-label { margin-right: 8px; }
 .tip-label { color: var(--text-secondary); flex: 1; }
 .tip-val { color: var(--text-primary); font-variant-numeric: tabular-nums; }
 
@@ -161,12 +166,14 @@ h2 { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px; }
 .tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
 .tile-value { font-size: 20px; margin-top: 6px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile-sub { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
-.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
-.pill::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
+#tile-chgState { white-space: normal; font-size: 17px; }
+.car #tile-chgState { font-size: 22px; }
+.pill { display: inline-flex; align-items: center; font-size: 14px; }
+.pill::before { margin-right: 6px; content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
 .pill[data-on="true"]::before { background: var(--good); }
 
-.obs-list { list-style: none; margin-top: 10px; display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
-.obs-list li { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.obs-list { list-style: none; margin-top: 10px; display: grid; gap: 6px; font-size: 12px; }
+.obs-list li { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
 
 .footer { text-align: center; line-height: 1.7; }
 
@@ -177,17 +184,17 @@ dialog {
   width: min(520px, calc(100vw - 32px)); padding: 20px;
 }
 dialog::backdrop { background: rgb(0 0 0 / 0.45); }
-dialog form { display: flex; flex-direction: column; gap: 12px; }
-dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary); }
-dialog label.check { flex-direction: row; align-items: center; gap: 8px; }
+dialog form { display: grid; gap: 12px; }
+dialog label { display: grid; gap: 4px; font-size: 12px; color: var(--text-secondary); }
+dialog label.check { grid-template-columns: auto 1fr; align-items: center; gap: 8px; }
 dialog input[type="text"], dialog input[type="password"], dialog input[type="number"], dialog input[type="url"], dialog select {
   font: inherit; font-size: 13px; color: var(--text-primary); background: var(--surface-2);
   border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; width: 100%;
 }
-dialog .row { display: flex; gap: 8px; }
+dialog .row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 dialog .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 dialog details summary { cursor: pointer; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
-.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.dialog-actions { display: grid; grid-auto-flow: column; justify-content: end; gap: 8px; }
 .form-msg { font-size: 12px; color: var(--text-secondary); min-height: 1em; }
 .form-msg[data-kind="error"] { color: var(--critical); }
 
@@ -199,3 +206,44 @@ dialog details summary { cursor: pointer; font-size: 12px; color: var(--text-sec
   .stat-value { font-size: 20px; }
   dialog .grid2 { grid-template-columns: 1fr; }
 }
+
+/* Erreur fatale (visible même sans console, ex. navigateur de l'auto) */
+.fatal { border: 1px solid var(--critical); border-radius: 10px; padding: 12px 14px; font-size: 13px; background: var(--surface-1); }
+.fatal pre { white-space: pre-wrap; word-break: break-word; font-size: 11px; color: var(--text-secondary); margin-top: 8px; }
+
+/* Petits écrans : les colonnes disparaissent, ordre résumé → graphiques → tuiles */
+.col { display: contents; }
+.hero { order: 1; }
+#cardTemp { order: 2; }
+#cardPower { order: 3; }
+.tiles { order: 4; }
+#obsCard { order: 5; }
+.footer { order: 6; }
+
+/* Grand écran paysage (écran de l'auto, ordinateur) : 2 colonnes */
+@media (min-width: 1100px) {
+  .container { max-width: 1600px; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: start; }
+  .header, .banner, .fatal, .footer, #obsCard { grid-column: 1 / -1; }
+  .col { display: grid; gap: 16px; order: 1; }
+  .hero { grid-template-columns: 1fr; }
+  .hero-stats { border-left: none; padding-left: 0; border-top: 1px solid var(--border); padding-top: 14px; }
+  .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Mode auto : texte et zones tactiles plus grands, lisibles d'un coup d'œil */
+.car body, body.car { padding: 16px 20px; }
+.car .btn { min-height: 48px; min-width: 48px; font-size: 15px; padding: 10px 16px; }
+.car .seg button { min-height: 44px; font-size: 14px; padding: 8px 14px; }
+.car h1 { font-size: 34px; }
+.car .hero-value { font-size: 72px; }
+.car .stat-value { font-size: 34px; }
+.car .stat-sub, .car .hero-sub, .car .tile-sub, .car .legend { font-size: 14px; }
+.car .label { font-size: 13px; }
+.car .tile-value { font-size: 28px; }
+.car .pill { font-size: 20px; }
+.car .pill::before { width: 12px; height: 12px; }
+.car .axis text, .car .target-label, .car .direct-labels text { font-size: 13px; }
+.car .tooltip { font-size: 14px; }
+.car dialog input, .car dialog select { font-size: 18px !important; padding: 12px !important; }
+.car dialog label { font-size: 15px; }
+.car .footer { display: none; }
