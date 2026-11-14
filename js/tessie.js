@@ -45,6 +45,8 @@ export class TessieClient {
   }
 
   vehicles() { return this.get('/vehicles?only_active=true'); }
+  /** Historique. Paramètres from/to en secondes ; interval=1 → tous les points. */
+  states(vin, query) { return this.get(`/${encodeURIComponent(vin)}/states?${query}`); }
   battery(vin) { return this.get(`/${encodeURIComponent(vin)}/battery`); }
   // use_cache=true : ne réveille pas l'auto.
   state(vin) { return this.get(`/${encodeURIComponent(vin)}/state?use_cache=true`); }

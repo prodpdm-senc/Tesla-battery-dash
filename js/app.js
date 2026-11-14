@@ -4,6 +4,7 @@ import { estimate, pickTemp, formatDuration } from './estimator.js';
 import { settings as settingsStore, history, observations, appendSample } from './store.js';
 import { createCharts } from './charts.js';
 import { Gauges } from './gauges.js';
+import { summarize, formatReport } from './history.js';
 
 const DEFAULTS = {
   vin: '',
@@ -398,6 +399,11 @@ function bindUi() {
     catch (e) { formMsg('Sélectionne et copie le lien ci-dessous.'); }
   });
   $('vinList').addEventListener('change', (e) => { form.elements.vin.value = e.target.value; });
+  $('btnHistTest').addEventListener('click', testHistory);
+  $('btnHistCopy').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText($('histReport').textContent); formMsg('Rapport copié.'); }
+    catch (e) { formMsg('Sélectionne le texte du rapport pour le copier.'); }
+  });
   $('btnClearHist').addEventListener('click', () => {
     if (!state.s.vin) return;
     history.clear(state.s.vin);
@@ -455,6 +461,40 @@ function saveSettings(fd) {
     render();
     if (!state.sim) schedule();
   }
+}
+
+/**
+ * Diagnostic : demande 6 h d'historique à Tessie et affiche ce qu'il contient
+ * (nombre de points, intervalle réel, champs disponibles). Sert à concevoir la page « Sessions ».
+ */
+async function testHistory() {
+  const f = $('settingsForm').elements;
+  const token = f.token.value.trim(), vin = f.vin.value.trim().toUpperCase();
+  if (!token || !vin) { formMsg('Il faut le token et le VIN.', 'error'); return; }
+  const c = new TessieClient({ token, baseUrl: f.baseUrl.value.trim() || DEFAULTS.baseUrl, timeoutMs: 30000 });
+  const to = Math.floor(Date.now() / 1000), from = to - 6 * 3600;
+  // Les noms exacts des paramètres ne sont pas tous documentés : on essaie du plus précis au plus simple.
+  const tries = [`from=${from}&to=${to}&interval=1`, `from=${from}&to=${to}`, `from=${from}`];
+  const out = $('histReport');
+  out.hidden = false; $('btnHistCopy').hidden = true;
+  out.textContent = 'Lecture de l’historique…';
+  const errors = [];
+  for (const q of tries) {
+    try {
+      const json = await c.states(vin, q);
+      out.textContent = formatReport(summarize(json), { requested: `/states?${q.replace(/\d{9,}/g, '…')}` })
+        + (errors.length ? `\n\nEssais précédents : ${errors.join(' ; ')}` : '')
+        + `\nNavigateur : ${navigator.userAgent}`;
+      $('btnHistCopy').hidden = false;
+      formMsg('Rapport prêt. Copie-le et envoie-le à Claude.');
+      return;
+    } catch (e) {
+      errors.push(`${q.replace(/\d{9,}/g, '…')} → ${e.message}`);
+      if (e instanceof ApiError && (e.kind === 'auth' || e.kind === 'network')) break;
+    }
+  }
+  out.textContent = `Échec :\n${errors.join('\n')}`;
+  formMsg('L’historique n’a pas pu être lu.', 'error');
 }
 
 async function findVins() {
