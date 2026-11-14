@@ -81,7 +81,7 @@ Pour trouver la vraie valeur sur ton auto :
 
 ## Diagnostic de l'historique Tessie
 
-*Réglages → Avancé → Tester l'historique Tessie (6 h)* lit l'historique (`/{vin}/states`) et affiche un rapport : nombre de points, intervalle réel entre les points, et champs disponibles (températures des modules, tension, courant, chauffage, etc.). Ce rapport sert à concevoir la future page « Sessions ». Il ne contient ni le token, ni le VIN, ni de position.
+*Réglages → Avancé → Tester l'historique Tessie* lit l'historique (`/{vin}/states`) sur 6 h, puis 48 h, puis 7 jours jusqu'à trouver des points (une auto endormie n'en ajoute pas), et affiche un rapport : nombre de points, intervalle réel entre les points, et champs disponibles (températures des modules, tension, courant, chauffage, etc.). Ce rapport sert à concevoir la future page « Sessions ». Il ne contient ni le token, ni le VIN, ni de position.
 
 ## Pistes pour la suite
 
