@@ -119,6 +119,9 @@ h2 { font-weight: 600; font-size: 14px; }
 .btn:hover { background: var(--surface-3); }
 .btn[aria-pressed="true"] { background: var(--seg-on-bg); color: var(--seg-on-text); }
 .btn-primary { background: var(--accent); color: #fff; }
+/* Icônes en SVG : le navigateur de l'auto n'a pas le symbole ↻ dans ses polices. */
+.btn-icon { display: inline-flex; align-items: center; justify-content: center; }
+.icon { display: block; }
 .btn-primary:hover { background: var(--accent); filter: brightness(1.1); }
 .btn-danger { color: var(--critical); margin-top: 10px; }
 .btn:focus-visible, .seg button:focus-visible, .target-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

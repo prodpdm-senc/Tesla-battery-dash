@@ -4,8 +4,8 @@
 
 /* global d3 */
 
-import { statesToSamples } from './history.js?v=12';
-import { detectChargingSessions, detectHeatingSessions, linkHeatingToCharging } from './sessions.js?v=12';
+import { statesToSamples } from './history.js?v=13';
+import { detectChargingSessions, detectHeatingSessions, linkHeatingToCharging } from './sessions.js?v=13';
 
 const MIN = 60000;
 // interval = secondes entre deux points demandés à Tessie (réponse plus légère sur de longues périodes).
@@ -91,12 +91,30 @@ export class SessionsView {
     const now = Math.floor(Date.now() / 1000);
     this.msg(`Lecture de l’historique Tessie (${p.label})…`);
     try {
-      const json = await this.deps.fetchStates(`from=${now - p.sec}&to=${now}&interval=${p.interval}`);
+      // Tessie refuse (400) les demandes trop denses (ex. 7 jours aux 60 s, ~10 000 points) :
+      // on réessaie avec un intervalle 4× plus grand, jusqu'à 3 fois.
+      let interval = p.interval, json = null;
+      for (let attempt = 0; ; attempt++) {
+        try {
+          json = await this.deps.fetchStates(`from=${now - p.sec}&to=${now}&interval=${interval}`);
+          break;
+        } catch (e) {
+          if (e.status !== 400 || attempt >= 3) throw e;
+          interval *= 4;
+          this.msg(`Lecture de l’historique Tessie (${p.label}, un point aux ${interval} s)…`);
+        }
+      }
       if (key !== this.period) return; // la période a changé pendant la requête
       this.cache[key] = statesToSamples(json);
+      this.intervalByKey = this.intervalByKey || {};
+      this.intervalByKey[key] = interval;
       this.analyse(this.cache[key]);
     } catch (e) {
-      this.msg(`Historique illisible : ${e.message}`, 'error');
+      if (key !== this.period) return;
+      // Ne pas laisser affichées les sessions d'une autre période sous le message d'erreur.
+      this.heats = []; this.charges = []; this.sel = null;
+      this.render();
+      this.msg(`${p.label} : historique illisible (${e.message}).`, 'error');
     } finally {
       if (this.loading === key) this.loading = null;
     }
@@ -108,7 +126,9 @@ export class SessionsView {
     this.sel = this.heats.length ? { kind: 'heat', i: 0 } : this.charges.length ? { kind: 'charge', i: 0 } : null;
     const p = PERIODS[this.period];
     const span = samples.length ? `${samples.length} points` : 'aucun point';
-    this.msg(note || `${p.label} · ${span} · ${this.heats.length} chauffe(s) · ${this.charges.length} recharge(s)`);
+    const iv = this.intervalByKey && this.intervalByKey[this.period];
+    const step = iv && iv > 1 ? ` (1 pt / ${iv >= 60 ? `${iv / 60} min` : `${iv} s`} max)` : '';
+    this.msg(note || `${p.label} · ${span}${step} · ${this.heats.length} chauffe(s) · ${this.charges.length} recharge(s)`);
     this.render();
   }
 
