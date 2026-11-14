@@ -5,6 +5,7 @@ import { settings as settingsStore, history, observations, appendSample } from '
 import { createCharts } from './charts.js';
 import { Gauges } from './gauges.js';
 import { summarize, formatReport } from './history.js';
+import { detectHeatingEnd } from './events.js';
 
 const DEFAULTS = {
   vin: '',
@@ -165,16 +166,16 @@ function onSample(sample) {
   const prev = state.samples[state.samples.length - 1];
   const added = appendSample(state.samples, sample);
   if (added) {
-    detectHeaterCutoff(prev, sample);
+    recordHeatingEnd(prev, sample);
     if (!state.sim) history.save(state.s.vin, state.samples);
   }
   render();
 }
 
-/** Le chauffage passe de ON à OFF → on note la température : indice de la cible du BMS. */
-function detectHeaterCutoff(prev, cur) {
-  if (!prev || prev.heaterOn !== true || cur.heaterOn !== false) return;
-  const obs = { t: cur.t, tempMin: prev.tempMin, tempMax: prev.tempMax };
+/** Fin de chauffe détectée → on note la température : indice de la vraie cible du BMS. */
+function recordHeatingEnd(prev, cur) {
+  const obs = detectHeatingEnd(prev, cur, state.obs[state.obs.length - 1] || null);
+  if (!obs) return;
   state.obs = state.sim ? [...state.obs, obs] : observations.add(state.s.vin, obs);
 }
 
@@ -269,9 +270,10 @@ function metricLabel() {
 // remplit la barre au maximum et s'affiche quand même en texte.
 const GAUGES = [
   { id: 'voltage', label: 'Tension', unit: 'V', min: 280, max: 420, get: (s) => s.voltage },
-  { id: 'current', label: 'Courant', unit: 'A', min: -500, max: 500, signed: true, get: (s) => s.current },
+  { id: 'current', label: 'Courant', unit: 'A', min: -500, max: 500, signed: true, get: (s) => s.current,
+    sub: () => '+ décharge' },
   { id: 'power', label: 'Puissance', unit: 'kW', min: -200, max: 200, decimals: 1, signed: true, get: (s) => s.powerKw,
-    sub: () => '+ charge' },
+    sub: () => '+ décharge' },
   { id: 'soc', label: 'Charge', unit: '%', min: 0, max: 100, get: (s) => s.soc, marker: (s) => s.chargeLimit,
     sub: (s) => (s.energyKwh != null ? `${fmt(s.energyKwh)} kWh` : '') },
   { id: 'charger', label: 'Chargeur', unit: 'kW', min: 0, max: 250, get: (s) => s.chargerPowerKw,
@@ -328,7 +330,7 @@ function renderObs() {
   $('obsCard').hidden = !state.obs.length;
   $('obsList').innerHTML = [...state.obs].reverse().slice(0, 8).map((o, i) => `
     <li><span>${new Date(o.t).toLocaleString('fr-CA', { dateStyle: 'short', timeStyle: 'short' })}</span>
-    <span>min ${fmt(o.tempMin)} °C · max ${fmt(o.tempMax)} °C</span>
+    <span>min ${fmt(o.tempMin)} °C · max ${fmt(o.tempMax)} °C${o.reason ? ` · ${o.reason}` : ''}</span>
     <button class="btn" type="button" data-obs="${state.obs.length - 1 - i}">Utiliser comme cible</button></li>`).join('');
 }
 

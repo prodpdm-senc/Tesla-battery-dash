@@ -53,11 +53,13 @@
     </div>
   </header>
 
+  <div class="notices">
   <div class="fatal" id="fatal" hidden>
     <b>Problème de chargement.</b> Copie ou prends en photo ce message pour le diagnostic.
     <pre></pre>
   </div>
   <div class="banner" id="banner" hidden></div>
+  </div>
 
   <aside class="rail" id="rail" aria-label="Valeurs en direct">
     <div class="chips" id="chips"></div>
@@ -127,16 +129,6 @@
 
   </div>
 
-  <section class="card" id="obsCard" hidden>
-    <h2>Coupures du chauffage observées</h2>
-    <p class="muted small">Température du module le plus froid quand le chauffage batterie s'est arrêté. Indice de la vraie cible du BMS.</p>
-    <ul class="obs-list" id="obsList"></ul>
-  </section>
-
-  <footer class="footer muted small">
-    Données via <a href="https://tessie.com" target="_blank" rel="noopener">Tessie</a> · mises en cache par Tessie, l'auto n'est pas réveillée.
-    Le token reste dans ce navigateur. <span id="lastUpdate"></span>
-  </footer>
 </main>
 
 <dialog id="settings">
@@ -190,6 +182,15 @@
       <button class="btn btn-danger" type="button" id="btnClearHist">Effacer l'historique local</button>
     </details>
 
+  <section class="dlg-section" id="obsCard" hidden>
+    <h3>Fins de chauffe observées</h3>
+    <p class="muted small">Température des modules quand la chauffe s'est arrêtée (fin du préconditionnement, ou chute de la puissance consommée auto stationnée). Indice de la vraie cible du BMS.</p>
+    <ul class="obs-list" id="obsList"></ul>
+  </section>
+  <p class="footer muted small">
+    Données via <a href="https://tessie.com" target="_blank" rel="noopener">Tessie</a> · mises en cache par Tessie, l'auto n'est pas réveillée.
+    Le token reste dans ce navigateur. <span id="lastUpdate"></span>
+  </p>
     <p class="form-msg" id="formMsg" role="status"></p>
     <div class="dialog-actions">
       <button class="btn" value="cancel" formnovalidate>Annuler</button>

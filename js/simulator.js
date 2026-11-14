@@ -8,7 +8,7 @@ export class Simulator {
     this.T = initial;          // °C, module le plus froid
     this.ambient = ambient;
     this.soc = 22;
-    this.phase = 'precond';    // precond → drive → charge
+    this.phase = 'precond';    // precond → hold → charge → idle
     this.phaseStart = start;
   }
 
@@ -37,8 +37,11 @@ export class Simulator {
     let heat = 0;
     if (this.phase === 'precond') {
       heat = 7;                             // kW de chauffe
-      if (this.T >= 50) this._next('charge');
-      else if (elapsed > 40) this._next('charge');
+      // Cible atteinte : le BMS coupe la chauffe mais le préconditionnement reste
+      // « actif » quelques minutes (comme observé sur une vraie auto).
+      if (this.T >= 50 || elapsed > 40) this._next('hold');
+    } else if (this.phase === 'hold') {
+      if (elapsed > 5) this._next('charge');
     } else if (this.phase === 'charge') {
       const p = this._chargePower();
       heat = p * 0.015;                     // pertes I²R
@@ -62,9 +65,11 @@ export class Simulator {
     const q = (v) => Math.round(v * 2) / 2;
     const charging = this.phase === 'charge';
     const heating = this.phase === 'precond';
+    const precond = heating || this.phase === 'hold';
     const pChg = charging ? this._chargePower() : 0;
     const voltage = 330 + this.soc * 0.6 + (charging ? 25 : 0) + noise();
-    const powerKw = charging ? pChg : heating ? -7.4 : -0.3;
+    // Même convention que tessie.js : positif = énergie qui sort de la batterie.
+    const powerKw = charging ? -pChg : heating ? 7.4 : precond ? 0.8 : 0.3;
     const current = (powerKw * 1000) / voltage;
     return {
       t: this.t,
@@ -77,12 +82,12 @@ export class Simulator {
       energyKwh: +(this.soc * 0.6).toFixed(1),
       chargerPowerKw: charging ? Math.round(pChg) : 0,
       chargerVoltage: charging ? Math.round(voltage) : 0,
-      chargerCurrent: charging ? Math.round(current) : 0,
+      chargerCurrent: charging ? Math.round(-current) : 0,
       chargingState: charging ? 'Charging' : 'Disconnected',
       fastCharger: charging,
       fastChargerType: charging ? 'Tesla' : null,
-      heaterOn: heating,
-      preconditioning: heating,
+      heaterOn: false,          // sur l'auto testée, ce drapeau reste faux pendant la chauffe
+      preconditioning: precond,
       outsideTemp: this.ambient,
       minutesToFull: null,
       chargeLimit: 80,

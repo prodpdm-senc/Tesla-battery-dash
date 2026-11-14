@@ -86,14 +86,18 @@ export function normalize(battery, state) {
   const cs = st.charge_state || {};
   const cl = st.climate_state || {};
   const voltage = num(b.pack_voltage, cs.pack_voltage);
-  const current = num(b.pack_current, cs.pack_current);
+  const ds = st.drive_state || {};
+  // Convention d'affichage : positif = énergie qui SORT de la batterie (consommation,
+  // chauffage, conduite) ; négatif = énergie qui entre (recharge, régénération).
+  // Tessie donne l'inverse (courant négatif en décharge), d'où le signe moins.
+  const rawCurrent = num(b.pack_current, cs.pack_current);
+  const current = rawCurrent == null ? null : -rawCurrent;
   return {
     t: num(toMs(b.timestamp), toMs(cs.timestamp), toMs(st.timestamp), Date.now()),
     tempMin: num(b.module_temp_min, cs.module_temp_min),
     tempMax: num(b.module_temp_max, cs.module_temp_max),
     voltage,
     current,
-    // Convention à confirmer : courant positif = énergie qui entre dans la batterie.
     powerKw: voltage != null && current != null ? (voltage * current) / 1000 : null,
     soc: num(b.battery_level, cs.battery_level, cs.usable_battery_level),
     energyKwh: num(b.energy_remaining),
@@ -109,5 +113,7 @@ export function normalize(battery, state) {
     minutesToFull: num(cs.minutes_to_full_charge),
     chargeLimit: num(cs.charge_limit_soc),
     vehicleState: st.state || null,
+    shiftState: ds.shift_state || null,
+    speed: num(ds.speed),
   };
 }

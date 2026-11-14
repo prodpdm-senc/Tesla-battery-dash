@@ -11,7 +11,7 @@ Données via l'API de [Tessie](https://developer.tessie.com). Page statique, san
 - **Puissance** : pack (V × I) et chargeur, en kW.
 - **Jauges en barres verticales** (panneau de gauche) : tension, courant, puissance, charge (avec repère de la limite), chargeur et température extérieure, avec la valeur en texte dessous. Les grandeurs signées partent d'une ligne du zéro : vers le haut si positif, vers le bas si négatif. Les échelles fixes se modifient dans `GAUGES` (`js/app.js`).
 - **États** : recharge, chauffage batterie, préconditionnement.
-- **Coupures du chauffage observées** : chaque fois que le chauffage batterie passe d'actif à inactif, la température est notée. Ça permet de **calibrer la vraie cible du BMS** (voir plus bas).
+- **Fins de chauffe observées** (dans Réglages) : la température est notée quand le préconditionnement se termine, ou quand la puissance consommée chute alors que l'auto est stationnée et le préconditionnement encore actif. Le drapeau « chauffage batterie » ne suffit pas : il peut rester faux pendant la chauffe. Ça permet de **calibrer la vraie cible du BMS** (voir plus bas).
 - **Mode démo** : préconditionnement simulé d'un pack LFP. Il sert à essayer le dashboard sans token.
 
 ## Démarrage
@@ -41,7 +41,8 @@ Il faut confirmer que `api.tessie.com` accepte les appels directs depuis un navi
 Le navigateur de l'auto est un Chromium parfois ancien (version 79 sur certains véhicules), sans console de débogage. Le dashboard en tient compte :
 
 - **Code compatible ES2019** : aucune syntaxe récente (`?.`, `??`, méthodes `#privées`). GitHub Actions le vérifie à chaque push.
-- **Mode auto** : détecté automatiquement (« Tesla » dans le navigateur) ou forcé avec `?auto` dans l'URL. Le texte et les boutons sont plus grands, et la page s'affiche en 2 colonnes sans défiler sur l'écran paysage.
+- **Tout à l'écran, sans défiler** : dès 600 px de large (navigateur de l'auto en plein écran ou non), la page remplit exactement la fenêtre. Jauges à gauche, résumé et graphiques à droite ; graphiques et barres prennent l'espace restant. Sous 600 px (téléphone), la page défile.
+- **Mode auto** : détecté automatiquement (« Tesla » dans le navigateur) ou forcé avec `?auto` dans l'URL. Boutons et zones tactiles plus grands.
 - **Écran tactile** : toucher un graphique affiche les valeurs ; toucher ailleurs les masque.
 - **Erreurs à l'écran** : si la page ne démarre pas, un encadré rouge affiche l'erreur et la version du navigateur. Prends-le en photo pour le diagnostic.
 - **Token mémorisé** : dans l'auto, « Se souvenir » est coché par défaut pour ne pas retaper le token.
@@ -70,13 +71,13 @@ Sinon, tape le token une seule fois dans l'auto avec « Se souvenir » coché.
 
 Pour trouver la vraie valeur sur ton auto :
 1. Laisse le dashboard ouvert pendant quelques préconditionnements.
-2. Regarde la section *Coupures du chauffage observées*.
+2. Regarde la section *Fins de chauffe observées*, dans **Réglages**.
 3. Clique **Utiliser comme cible** sur une valeur cohérente.
 
 ## Notes et limites
 
 - **Données en cache** : Tessie sert ses données en cache (`use_cache=true`), donc l'auto n'est pas réveillée. La fraîcheur dépend de Tessie ; le statut indique « Données d'il y a X min » quand elles sont vieilles.
-- **Signe du courant** : la convention retenue est *courant positif = énergie qui entre dans la batterie*. À confirmer sur une vraie session de recharge.
+- **Signe du courant et de la puissance** : positif = énergie qui **sort** de la batterie (chauffage, conduite) ; négatif = recharge ou régénération. Tessie donne l'inverse ; la conversion est faite dans `js/tessie.js`.
 - **Historique** : 12 h maximum, gardé localement par VIN. Il se remplit seulement quand la page est ouverte.
 
 ## Diagnostic de l'historique Tessie
@@ -101,6 +102,7 @@ js/estimator.js     régression, EMA, ETA (pur, testé)
 js/charts.js        graphiques D3
 js/gauges.js        jauges en barres verticales
 js/history.js       analyse de l'historique Tessie (pur, testé)
+js/events.js        détection des fins de chauffe (pur, testé)
 js/simulator.js     mode démo
 js/store.js         stockage local (réglages, historique)
 test/               tests node:test
