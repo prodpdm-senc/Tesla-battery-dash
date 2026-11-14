@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { findRecords, findKey, summarize, formatReport } from '../js/history.js';
+import { findRecords, findKey, summarize, formatReport, shape } from '../js/history.js';
 
 test('findRecords trouve le tableau peu importe l\'enveloppe', () => {
   assert.equal(findRecords({ results: [{ a: 1 }] }).length, 1);
@@ -45,4 +45,16 @@ test('summarize : réponse vide', () => {
   const s = summarize({});
   assert.equal(s.count, 0);
   assert.match(formatReport(s), /Points : 0/);
+});
+
+test('findRecords cherche dans un objet imbriqué', () => {
+  assert.equal(findRecords({ results: { states: [{ a: 1 }, { a: 2 }] } }).length, 2);
+  assert.equal(findRecords({ results: [], extra: { list: [{ a: 1 }] } }).length, 1);
+});
+
+test('shape décrit la structure sans les valeurs', () => {
+  const sh = shape({ results: [{ timestamp: 1, latitude: 45.5, charge_state: { battery_level: 50 } }, {}] });
+  assert.equal(sh, '{results: [2 × {timestamp, latitude, charge_state: {battery_level}}]}');
+  assert.ok(!sh.includes('45.5'));
+  assert.equal(shape({ results: [] }), '{results: [0]}');
 });

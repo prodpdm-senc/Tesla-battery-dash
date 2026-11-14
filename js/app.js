@@ -479,7 +479,7 @@ async function testHistory() {
   // interval=1 (tous les points) seulement sur la courte période, pour garder la réponse légère.
   const windows = [
     { label: '6 h', sec: 6 * 3600, extras: ['&interval=1', ''] },
-    { label: '48 h', sec: 48 * 3600, extras: [''] },
+    { label: '48 h', sec: 48 * 3600, extras: ['', '&condense=false'] },
     { label: '7 jours', sec: 7 * 86400, extras: [''] },
   ];
   const out = $('histReport');
