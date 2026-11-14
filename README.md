@@ -38,13 +38,15 @@ Il faut confirmer que `api.tessie.com` accepte les appels directs depuis un navi
 
 ## Températures du moteur (Fleet Telemetry)
 
-Tesla peut transmettre `DiStatorTempR`, `DiInverterTR` et `DiHeatsinkTR` (stator, onduleur, dissipateur arrière ; 1 point / min au mieux, logiciel 2024.26+), mais ils ne font pas partie de la configuration de télémétrie par défaut de Tessie. Dans *Réglages → Avancé → Moteur arrière* :
+Stator, onduleur et dissipateur de l'unité arrière (`DiStatorTempR`, `DiInverterTR`, `DiHeatsinkTR`, en °C).
 
-- **Vérifier** (lecture seule) : champs configurés, valeurs trouvées dans l'état et dans l'historique de la dernière heure.
-- **Activer ces 3 champs** : lit la configuration actuelle et envoie seulement `{ fields }` : tous les champs actuels inchangés, plus les 3 champs du moteur (aux 60 s). Le reste de la configuration (serveur, certificat, expiration, identifiants) appartient à Tessie et n'est jamais renvoyé. Rien n'est envoyé si la configuration est illisible ou si Tessie indique `limit_reached`. Une confirmation est demandée.
-- **Tester le flux (60 s)** : écoute le flux en direct de Tessie et liste les champs reçus.
+**Pour les recevoir : activer le Profiler dans Tessie (web).** Ces valeurs n'apparaissent ni dans `/state` ni dans l'historique : elles arrivent par le **flux en direct** de Tessie (`wss://streaming.tessie.com/{VIN}`, messages `{ vin, createdAt, isResend, data: [{ key, value }] }`, seulement les champs qui ont changé). En mode Direct, le dashboard garde une connexion ouverte à ce flux (reconnexion automatique) et applique les dernières températures du moteur aux mesures, ce qui alimente le graphique « Moteur arrière » et la pastille « Moteur arr. ».
 
-L'unité de ces températures n'est pas documentée officiellement (°C supposé) : à vérifier avec les premières valeurs réelles.
+Dans *Réglages → Avancé → Moteur arrière* :
+
+- **Vérifier** (lecture seule) : champs configurés, indicateurs (`synced`, `limit_reached`, `key_paired`…), valeurs dans l'état et l'historique.
+- **Tester le flux (60 s)** : connexion, messages et champs reçus.
+- **Activer ces 3 champs** : seulement utile sans le Profiler. Envoie `{ fields }` (champs actuels inchangés + les 3 du moteur) ; jamais le reste de la configuration de Tessie ; rien n'est envoyé si la configuration est illisible ou si `limit_reached` est vrai.
 
 ## Page Sessions
 
