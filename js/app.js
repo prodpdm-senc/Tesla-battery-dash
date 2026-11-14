@@ -1,18 +1,18 @@
-import { TessieClient, ApiError } from './tessie.js?v=17';
-import { Simulator } from './simulator.js?v=17';
-import { estimate, pickTemp, formatDuration } from './estimator.js?v=17';
-import { settings as settingsStore, history, observations, appendSample } from './store.js?v=17';
-import { createCharts } from './charts.js?v=17';
-import { Gauges } from './gauges.js?v=17';
-import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=17';
-import { DRIVE_FIELDS, configuredFields, withStatorField, findDriveValues, streamProbe, configFlags, LiveStream, attachMotor } from './telemetry.js?v=17';
-import { SessionsView, demoHistory } from './sessionsView.js?v=17';
-import { detectHeatingEnd } from './events.js?v=17';
+import { TessieClient, ApiError } from './tessie.js?v=18';
+import { Simulator } from './simulator.js?v=18';
+import { estimate, pickTemp, formatDuration } from './estimator.js?v=18';
+import { settings as settingsStore, history, observations, appendSample } from './store.js?v=18';
+import { createCharts } from './charts.js?v=18';
+import { Gauges } from './gauges.js?v=18';
+import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=18';
+import { DRIVE_FIELDS, configuredFields, withStatorField, findDriveValues, streamProbe, configFlags, LiveStream, attachMotor, applyPatch } from './telemetry.js?v=18';
+import { SessionsView, demoHistory } from './sessionsView.js?v=18';
+import { detectHeatingEnd } from './events.js?v=18';
 
 // Version de l'app. Le même numéro est ajouté à l'adresse de chaque fichier (?v=…)
 // pour forcer les navigateurs (Chrome iPhone, auto) à charger la nouvelle version.
 // À augmenter à chaque mise en ligne ; test/version.test.mjs vérifie la cohérence.
-export const APP_VERSION = '17';
+export const APP_VERSION = '18';
 
 const DEFAULTS = {
   vin: '',
@@ -128,21 +128,31 @@ function stop() {
  */
 function startStream() {
   state.motor = null;
+  let lastSave = 0;
   state.stream = new LiveStream({
     vin: state.s.vin,
     token: state.s.token,
-    onMotor: (m) => {
-      state.motor = Object.assign({}, state.motor || {}, Object.keys(m).reduce((o, k) => {
-        if (m[k] != null) o[k] = m[k];
-        return o;
-      }, {}));
-      // Les valeurs vont sur le dernier échantillon (pas d'échantillon séparé : sinon
-      // les courbes des cellules seraient coupées).
-      const last = state.samples[state.samples.length - 1];
-      if (last) {
-        for (const k of ['statorTemp', 'inverterTemp', 'heatsinkTemp']) if (m[k] != null) last[k] = m[k];
+    // Flux en direct : batterie (cellules, tension, courant, SOC…) et moteur arrière.
+    // Seuls les champs qui changent arrivent ; les autres sont repris de la mesure précédente.
+    onPatch: (p) => {
+      const motor = {};
+      for (const k of ['statorTemp', 'inverterTemp', 'heatsinkTemp']) if (p.patch[k] != null) motor[k] = p.patch[k];
+      if (Object.keys(motor).length) state.motor = Object.assign({}, state.motor || {}, motor, { t: p.t });
+      const prev = state.samples[state.samples.length - 1];
+      const { sample, added } = applyPatch(state.samples, p);
+      if (added) {
+        recordHeatingEnd(prev, sample);
+        // Sauvegarde locale au plus une fois par minute (le flux peut être rapide).
+        if (Date.now() - lastSave > 60000) { history.save(state.s.vin, state.samples); lastSave = Date.now(); }
       }
+      state.streamAt = Date.now();
       render();
+    },
+    onErrors: (errs) => {
+      // Ex. « unsupported_field (DiStatorTempR) » : l'auto ne prend pas ce champ en charge.
+      // Seulement les champs utilisés ici (pas l'unité avant d'une propulsion, par exemple).
+      const used = errs.filter((e) => USED_STREAM_FIELDS.some((f) => e.indexOf(`(${f})`) >= 0));
+      if (used.length) banner('error', `Flux Tessie : ${used.map(escapeHtml).join(', ')}`);
     },
   });
   state.stream.start();
@@ -256,9 +266,20 @@ function onSample(sample) {
   if (added) {
     recordHeatingEnd(prev, sample);
     if (!state.sim) history.save(state.s.vin, state.samples);
+  } else if (prev && sample.t < prev.t) {
+    // Le flux en direct a déjà une mesure plus récente : on garde quand même les états
+    // que seul /state fournit (préconditionnement, recharge, rapport…).
+    for (const k of STATE_ONLY) if (sample[k] != null) prev[k] = sample[k];
   }
   render();
 }
+
+/** Champs du flux en direct lus par le dashboard. */
+const USED_STREAM_FIELDS = DRIVE_FIELDS.concat(['ModuleTempMin', 'ModuleTempMax', 'PackVoltage', 'PackCurrent', 'Soc']);
+
+/** Champs fournis par /state mais pas par le flux en direct. */
+const STATE_ONLY = ['preconditioning', 'chargingState', 'fastCharger', 'fastChargerType', 'chargeLimit',
+  'minutesToFull', 'vehicleState', 'shiftState', 'chargerVoltage', 'chargerCurrent'];
 
 /** Fin de chauffe détectée → on note la température : indice de la vraie cible du BMS. */
 function recordHeatingEnd(prev, cur) {
@@ -720,6 +741,8 @@ async function telStream() {
     `Connexion : ${r.opened ? 'établie' : 'échec'}${r.error ? ` (${r.error})` : ''}${r.closeCode != null ? ` · fermée, code ${r.closeCode}` : ''}`,
     `Messages reçus : ${r.messages}`,
     `Moteur arrière : ${r.stator.length ? r.stator.slice(-6).join(' ; ') : 'aucune valeur'}`,
+    `Erreurs du flux : ${r.errors.length ? Array.from(new Set(r.errors)).join(' ; ') : 'aucune'}`,
+    `Connectivité : ${r.status.length ? r.status.join(' → ') : '—'}`,
     `Champs vus (${r.keys.length}) : ${r.keys.slice(0, 80).join(', ') || '—'}`,
   ].join('\n'));
 }

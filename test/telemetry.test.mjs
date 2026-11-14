@@ -98,3 +98,54 @@ test('attachMotor : seulement si récent et sans écraser', () => {
   assert.equal(attachMotor({ t: 130000, statorTemp: 55 }, motor).statorTemp, 55);
   assert.equal(attachMotor({ t: 100000 + 10 * 60000 }, motor).statorTemp, undefined);
 });
+
+import { streamPatch, streamErrors, applyPatch, itemBool } from '../js/telemetry.js';
+
+// Exemple tiré de la documentation de Tessie (Access Tesla Fleet Telemetry).
+const docMsg = { data: [
+  { key: 'IdealBatteryRange', value: { stringValue: '171.833' } },
+  { key: 'ModuleTempMax', value: { stringValue: '41.500' } },
+  { key: 'EnergyRemaining', value: { stringValue: '42.880' } },
+  { key: 'Location', value: { locationValue: { latitude: 37.49, longitude: -121.94 } } },
+  { key: 'PackVoltage', value: { stringValue: '367.950' } },
+  { key: 'ACChargingPower', value: { stringValue: '0.000' } },
+  { key: 'PackCurrent', value: { stringValue: '-0.600' } },
+  { key: 'ModuleTempMin', value: { stringValue: '41.000' } },
+  { key: 'Soc', value: { stringValue: '54.987' } },
+], createdAt: '2024-08-01T00:44:39.138713677Z', vin: 'X' };
+
+test('streamPatch : exemple de la doc Tessie', () => {
+  const p = streamPatch(docMsg);
+  assert.equal(p.t, Date.parse('2024-08-01T00:44:39.138Z'));
+  assert.deepEqual(p.patch, { tempMin: 41, tempMax: 41.5, voltage: 367.95, current: 0.6, soc: 54.987, energyKwh: 42.88, chargerPowerKw: 0 });
+  assert.equal(streamPatch({ alerts: [] }), null);
+  assert.equal(streamPatch({ data: [{ key: 'Location', value: { locationValue: {} } }] }), null);
+});
+
+test('streamPatch : moteur et chauffage', () => {
+  const p = streamPatch({ createdAt: '2026-11-14T20:00:00Z', data: [
+    { key: 'DiStatorTempR', value: { stringValue: '70.0' } }, { key: 'BatteryHeaterOn', value: { booleanValue: true } }] });
+  assert.equal(p.patch.statorTemp, 70);
+  assert.equal(p.patch.heaterOn, true);
+  assert.equal(itemBool({ booleanValue: false }), false);
+});
+
+test('streamErrors', () => {
+  assert.deepEqual(streamErrors({ errors: [{ name: 'unsupported_field', tags: { field_name: 'DiStatorTempR' } }] }), ['unsupported_field (DiStatorTempR)']);
+  assert.deepEqual(streamErrors(docMsg), []);
+});
+
+test('applyPatch : complète la dernière mesure, une nouvelle au plus toutes les 10 s', () => {
+  const s = [{ t: 0, tempMin: 20, tempMax: 21, voltage: 350, current: 10, powerKw: 3.5, preconditioning: true, fromHistory: true }];
+  let r = applyPatch(s, { t: 5000, patch: { tempMin: 20.5 } });
+  assert.equal(r.added, false);
+  assert.equal(s.length, 1);
+  assert.equal(s[0].tempMin, 20.5);
+  r = applyPatch(s, { t: 15000, patch: { current: 20 } });
+  assert.equal(r.added, true);
+  assert.equal(s.length, 2);
+  assert.equal(s[1].tempMax, 21);              // repris de la mesure précédente
+  assert.equal(s[1].preconditioning, true);
+  assert.equal(s[1].powerKw, 7);               // 350 V × 20 A
+  assert.equal(s[1].fromHistory, undefined);
+});

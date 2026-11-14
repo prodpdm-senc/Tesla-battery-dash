@@ -36,6 +36,15 @@ Il n'est jamais envoyé ailleurs qu'à l'API configurée.
 
 Il faut confirmer que `api.tessie.com` accepte les appels directs depuis un navigateur. Si ce n'est pas le cas, la solution prévue est un petit proxy (par exemple un Cloudflare Worker) qui garde le token côté serveur. Il suffit ensuite de changer l'**URL de l'API** dans *Réglages → Avancé*, sans toucher au code.
 
+## Flux en direct de Tessie
+
+En mode Direct, le dashboard reste connecté au flux en direct de Tessie (`wss://streaming.tessie.com/{VIN}?access_token=…`, [documentation](https://developer.tessie.com/reference/access-tesla-fleet-telemetry)). Les valeurs arrivent sous la forme `{ key, value: { stringValue: "41.500" } }` et seulement quand elles changent :
+
+- **Batterie** : `ModuleTempMin/Max`, `PackVoltage`, `PackCurrent`, `Soc`, `EnergyRemaining`, puissance de recharge, `OutsideTemp`, `VehicleSpeed`. Une nouvelle mesure au plus toutes les 10 s (les champs absents sont repris de la mesure précédente) : les courbes et le décompte suivent la chauffe presque en direct.
+- **Moteur arrière** : stator, onduleur, dissipateur (Profiler de Tessie activé).
+- Les appels à `/battery` et `/state` (toutes les 30 s par défaut) continuent en renfort et fournissent ce que le flux n'a pas (préconditionnement, état de recharge, rapport…).
+- **Erreurs** du flux (ex. `unsupported_field`) : affichées si elles concernent un champ utilisé ; toutes visibles dans *Tester le flux*, avec les changements de connectivité.
+
 ## Températures du moteur (Fleet Telemetry)
 
 Stator, onduleur et dissipateur de l'unité arrière (`DiStatorTempR`, `DiInverterTR`, `DiHeatsinkTR`, en °C).

@@ -123,7 +123,7 @@ export function pickStatorTemp(obj, kind = 'stator') {
  */
 export function streamProbe({ vin, token, ms = 60000, onTick }) {
   return new Promise((resolve) => {
-    const res = { opened: false, messages: 0, keys: new Set(), stator: [], error: null, closeCode: null };
+    const res = { opened: false, messages: 0, keys: new Set(), stator: [], errors: [], status: [], error: null, closeCode: null };
     let ws;
     const done = () => {
       clearTimeout(timer);
@@ -143,6 +143,8 @@ export function streamProbe({ vin, token, ms = 60000, onTick }) {
       try { data = JSON.parse(e.data); } catch (err) { return; }
       collectKeys(data, res.keys);
       for (const s of findDriveValues(data)) res.stator.push(`${s.path} = ${s.value}`);
+      for (const e of streamErrors(data)) res.errors.push(e);
+      if (data && typeof data.status === 'string') res.status.push(data.status);
       if (onTick) onTick(res);
     };
   });
@@ -169,10 +171,11 @@ function collectKeys(obj, set, depth = 4, prefix = '') {
  * Se reconnecte seule (5 s, puis jusqu'à 5 min entre deux essais).
  */
 export class LiveStream {
-  constructor({ vin, token, onMotor, onState }) {
+  constructor({ vin, token, onPatch, onState, onErrors }) {
     this.vin = vin;
     this.token = token;
-    this.onMotor = onMotor;
+    this.onPatch = onPatch;
+    this.onErrors = onErrors || (() => {});
     this.onState = onState || (() => {});
     this.delay = 5000;
     this.stopped = true;
@@ -206,8 +209,10 @@ export class LiveStream {
     ws.onmessage = (e) => {
       let d;
       try { d = JSON.parse(e.data); } catch (err) { return; }
-      const m = motorFromMessage(d);
-      if (m) this.onMotor(m);
+      const errs = streamErrors(d);
+      if (errs.length) this.onErrors(errs);
+      const p = streamPatch(d);
+      if (p) this.onPatch(p);
     };
   }
 
@@ -239,4 +244,82 @@ export function attachMotor(sample, motor, maxAgeMs = 3 * 60000) {
     if (sample[k] == null && motor[k] != null) sample[k] = motor[k];
   }
   return sample;
+}
+
+/** Booléen d'un champ du flux ({ booleanValue: true }, "true", 1…). */
+export function itemBool(v) {
+  if (typeof v === 'boolean') return v;
+  if (v === 1 || v === 0) return v === 1;
+  if (typeof v === 'string') return v === 'true' ? true : v === 'false' ? false : null;
+  if (v && typeof v === 'object') {
+    for (const k of Object.keys(v)) {
+      const b = itemBool(v[k]);
+      if (b != null) return b;
+    }
+  }
+  return null;
+}
+
+/**
+ * Message de données du flux → mesures au format du dashboard (seulement les champs
+ * présents : le flux n'envoie que ce qui a changé). Même convention que normalize() :
+ * courant et puissance positifs = énergie qui SORT de la batterie.
+ * @returns {{ t:number, patch:object } | null}
+ */
+export function streamPatch(d) {
+  if (!d || !Array.isArray(d.data)) return null;
+  const items = {};
+  for (const it of d.data) if (it && typeof it.key === 'string') items[it.key] = it.value;
+  const n = (k) => (k in items ? itemValue(items[k]) : null);
+  const patch = {};
+  const set = (k, v) => { if (v != null) patch[k] = v; };
+  const tMin = n('ModuleTempMin'), tMax = n('ModuleTempMax');
+  set('tempMin', tMin != null && tMin > -40 && tMin < 80 ? tMin : null);
+  set('tempMax', tMax != null && tMax > -40 && tMax < 80 ? tMax : null);
+  const v = n('PackVoltage');
+  set('voltage', v != null && v >= 200 ? v : null);
+  const i = n('PackCurrent');
+  set('current', i != null ? -i : null);
+  set('soc', n('Soc'));
+  set('energyKwh', n('EnergyRemaining'));
+  const dc = n('DCChargingPower'), ac = n('ACChargingPower');
+  if (dc != null || ac != null) patch.chargerPowerKw = Math.max(dc || 0, ac || 0);
+  set('outsideTemp', n('OutsideTemp'));
+  set('speed', n('VehicleSpeed'));
+  if ('BatteryHeaterOn' in items) set('heaterOn', itemBool(items.BatteryHeaterOn));
+  const m = motorFromMessage(d);
+  if (m) for (const k of ['statorTemp', 'inverterTemp', 'heatsinkTemp']) set(k, m[k]);
+  if (!Object.keys(patch).length) return null;
+  const t = Date.parse(d.createdAt);
+  return { t: Number.isFinite(t) ? t : Date.now(), patch };
+}
+
+/** Message d'erreurs du flux → textes lisibles (ex. « unsupported_field (DiStatorTempR) »). */
+export function streamErrors(d) {
+  if (!d || !Array.isArray(d.errors)) return [];
+  return d.errors.map((e) => {
+    const field = e && e.tags && e.tags.field_name;
+    return `${(e && e.name) || 'erreur'}${field ? ` (${field})` : ''}`;
+  });
+}
+
+/**
+ * Applique un patch du flux aux mesures : nouvelle mesure (valeurs manquantes reprises
+ * de la précédente) au plus toutes les `minGapMs`, sinon mise à jour de la dernière.
+ * Retourne { sample, added } ; la puissance est recalculée (V × I).
+ */
+export function applyPatch(samples, p, minGapMs = 10000) {
+  const last = samples[samples.length - 1];
+  let sample, added = false;
+  if (!last || p.t - last.t >= minGapMs) {
+    sample = Object.assign({}, last || {}, p.patch, { t: Math.max(p.t, last ? last.t + 1 : p.t), fromStream: true });
+    delete sample.fromHistory;
+    samples.push(sample);
+    added = true;
+  } else {
+    sample = last;
+    Object.assign(sample, p.patch);
+  }
+  if (sample.voltage != null && sample.current != null) sample.powerKw = (sample.voltage * sample.current) / 1000;
+  return { sample, added };
 }
