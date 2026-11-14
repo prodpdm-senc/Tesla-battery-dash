@@ -1,0 +1,10 @@
+{
+  "name": "tesla-battery-dash",
+  "private": true,
+  "type": "module",
+  "description": "Dashboard batterie Tesla (préconditionnement, recharge rapide) via Tessie",
+  "scripts": {
+    "test": "node --test test/estimator.test.mjs",
+    "serve": "python3 -m http.server 8000"
+  }
+}
