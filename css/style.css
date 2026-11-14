@@ -208,6 +208,7 @@ dialog input[type="text"], dialog input[type="password"], dialog input[type="num
 }
 dialog .row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 dialog .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.hist-report { white-space: pre-wrap; word-break: break-word; font-size: 11px; line-height: 1.5; max-height: 40vh; overflow: auto; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; color: var(--text-secondary); }
 dialog details summary { cursor: pointer; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
 .dialog-actions { display: grid; grid-auto-flow: column; justify-content: end; gap: 8px; }
 .form-msg { font-size: 12px; color: var(--text-secondary); min-height: 1em; }

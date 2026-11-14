@@ -79,6 +79,10 @@ Pour trouver la vraie valeur sur ton auto :
 - **Signe du courant** : la convention retenue est *courant positif = énergie qui entre dans la batterie*. À confirmer sur une vraie session de recharge.
 - **Historique** : 12 h maximum, gardé localement par VIN. Il se remplit seulement quand la page est ouverte.
 
+## Diagnostic de l'historique Tessie
+
+*Réglages → Avancé → Tester l'historique Tessie (6 h)* lit l'historique (`/{vin}/states`) et affiche un rapport : nombre de points, intervalle réel entre les points, et champs disponibles (températures des modules, tension, courant, chauffage, etc.). Ce rapport sert à concevoir la future page « Sessions ». Il ne contient ni le token, ni le VIN, ni de position.
+
 ## Pistes pour la suite
 
 - Proxy Cloudflare Worker : token secret et historique enregistré même page fermée.
@@ -96,6 +100,7 @@ js/tessie.js        client API et normalisation des champs
 js/estimator.js     régression, EMA, ETA (pur, testé)
 js/charts.js        graphiques D3
 js/gauges.js        jauges en barres verticales
+js/history.js       analyse de l'historique Tessie (pur, testé)
 js/simulator.js     mode démo
 js/store.js         stockage local (réglages, historique)
 test/               tests node:test
