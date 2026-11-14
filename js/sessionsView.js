@@ -4,8 +4,8 @@
 
 /* global d3 */
 
-import { statesToSamples } from './history.js?v=17';
-import { detectChargingSessions, detectHeatingSessions, linkHeatingToCharging } from './sessions.js?v=17';
+import { statesToSamples } from './history.js?v=18';
+import { detectChargingSessions, detectHeatingSessions, linkHeatingToCharging } from './sessions.js?v=18';
 
 const MIN = 60000;
 // interval = secondes entre deux points demandés à Tessie (réponse plus légère sur de longues périodes).
