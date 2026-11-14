@@ -472,29 +472,58 @@ async function testHistory() {
   const token = f.token.value.trim(), vin = f.vin.value.trim().toUpperCase();
   if (!token || !vin) { formMsg('Il faut le token et le VIN.', 'error'); return; }
   const c = new TessieClient({ token, baseUrl: f.baseUrl.value.trim() || DEFAULTS.baseUrl, timeoutMs: 30000 });
-  const to = Math.floor(Date.now() / 1000), from = to - 6 * 3600;
-  // Les noms exacts des paramètres ne sont pas tous documentés : on essaie du plus précis au plus simple.
-  const tries = [`from=${from}&to=${to}&interval=1`, `from=${from}&to=${to}`, `from=${from}`];
+  const now = Math.floor(Date.now() / 1000);
+  // Une auto endormie n'ajoute pas de points : on élargit la période jusqu'à en trouver.
+  // interval=1 (tous les points) seulement sur la courte période, pour garder la réponse légère.
+  const windows = [
+    { label: '6 h', sec: 6 * 3600, extras: ['&interval=1', ''] },
+    { label: '48 h', sec: 48 * 3600, extras: [''] },
+    { label: '7 jours', sec: 7 * 86400, extras: [''] },
+  ];
   const out = $('histReport');
   out.hidden = false; $('btnHistCopy').hidden = true;
-  out.textContent = 'Lecture de l’historique…';
-  const errors = [];
-  for (const q of tries) {
-    try {
-      const json = await c.states(vin, q);
-      out.textContent = formatReport(summarize(json), { requested: `/states?${q.replace(/\d{9,}/g, '…')}` })
-        + (errors.length ? `\n\nEssais précédents : ${errors.join(' ; ')}` : '')
-        + `\nNavigateur : ${navigator.userAgent}`;
-      $('btnHistCopy').hidden = false;
-      formMsg('Rapport prêt. Copie-le et envoie-le à Claude.');
-      return;
-    } catch (e) {
-      errors.push(`${q.replace(/\d{9,}/g, '…')} → ${e.message}`);
-      if (e instanceof ApiError && (e.kind === 'auth' || e.kind === 'network')) break;
+  const log = [];
+  const hide = (q) => q.replace(/\d{9,}/g, '…');
+  let found = null, last = null;
+  outer:
+  for (const w of windows) {
+    for (const extra of w.extras) {
+      const q = `from=${now - w.sec}&to=${now}${extra}`;
+      out.textContent = `Lecture de l’historique (${w.label})…`;
+      try {
+        const json = await c.states(vin, q);
+        const sum = summarize(json);
+        log.push(`${w.label} ${hide(extra) || '(intervalle par défaut)'} → ${sum.count} points`);
+        last = { sum, q, w };
+        if (sum.count > 0) { found = last; break outer; }
+      } catch (e) {
+        log.push(`${w.label} ${hide(extra)} → ${e.message}`);
+        if (e instanceof ApiError && (e.kind === 'auth' || e.kind === 'network')) break outer;
+      }
     }
   }
-  out.textContent = `Échec :\n${errors.join('\n')}`;
-  formMsg('L’historique n’a pas pu être lu.', 'error');
+  // État actuel (en cache, ne réveille pas l'auto) : aide à expliquer un historique vide.
+  let stateLine = '';
+  try {
+    const st = await c.state(vin);
+    const cs = (st && st.charge_state) || {};
+    const ts = cs.timestamp || (st && st.timestamp);
+    const ms = ts ? (ts < 1e12 ? ts * 1000 : ts) : null;
+    stateLine = `\nÉtat actuel : ${(st && st.state) || '—'}`
+      + (ms ? ` · dernière donnée il y a ${formatDuration(Date.now() - ms)}` : '');
+  } catch (e) { stateLine = `\nÉtat actuel : illisible (${e.message})`; }
+
+  const r = found || last;
+  if (!r) {
+    out.textContent = `Échec :\n${log.join('\n')}${stateLine}`;
+    formMsg('L’historique n’a pas pu être lu.', 'error');
+    return;
+  }
+  out.textContent = formatReport(r.sum, { requested: `/states?${hide(r.q)} (${r.w.label})` })
+    + `\n\nEssais : ${log.join(' ; ')}${stateLine}`
+    + `\nNavigateur : ${navigator.userAgent}`;
+  $('btnHistCopy').hidden = false;
+  formMsg(found ? 'Rapport prêt. Copie-le et envoie-le à Claude.' : 'Aucun point trouvé sur 7 jours. Copie quand même le rapport.');
 }
 
 async function findVins() {
