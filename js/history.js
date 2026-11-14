@@ -20,18 +20,51 @@ export const WANTED = {
 };
 
 /** Trouve le tableau d'états dans la réponse, peu importe l'enveloppe. */
-export function findRecords(json, depth = 3) {
-  if (Array.isArray(json)) return json;
-  if (!json || typeof json !== 'object' || depth < 0) return [];
-  for (const k of ['results', 'states', 'data', 'items']) {
-    if (Array.isArray(json[k]) && json[k].length) return json[k];
+/** « battery_levels » → « battery_level », « ids » → « id ». */
+export function singular(k) {
+  if (/ies$/.test(k)) return k.slice(0, -3) + 'y';
+  if (/s$/.test(k) && !/ss$/.test(k)) return k.slice(0, -1);
+  return k;
+}
+
+/**
+ * Format en colonnes de Tessie : { timestamps: [...], battery_levels: [...], ... }
+ * (un tableau par mesure, tous de même longueur) → liste de points
+ * { timestamp, battery_level, ... }. Retourne null si l'objet n'a pas cette forme.
+ */
+export function columnarToRecords(obj) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+  const arrays = Object.keys(obj).filter((k) => Array.isArray(obj[k]));
+  if (arrays.length < 2) return null;
+  const n = Math.max(...arrays.map((k) => obj[k].length));
+  const cols = arrays.filter((k) => obj[k].length === n);
+  // Des tableaux d'objets sont des listes de points, pas des colonnes.
+  if (!n || cols.length < 2 || cols.some((k) => obj[k][0] !== null && typeof obj[k][0] === 'object')) return null;
+  const recs = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const r = {};
+    for (const k of cols) r[singular(k)] = obj[k][i];
+    recs[i] = r;
   }
-  // Repli : le plus long tableau d'objets, cherché aussi dans les sous-objets
-  // (ex. { results: { states: [...] } }).
+  return recs;
+}
+
+export function findRecords(json, depth = 3) {
+  if (Array.isArray(json)) return json.length && json[0] !== null && typeof json[0] === 'object' ? json : [];
+  if (!json || typeof json !== 'object' || depth < 0) return [];
+  const cols = columnarToRecords(json);
+  if (cols) return cols;
+  for (const k of ['results', 'states', 'data', 'items']) {
+    const v = json[k];
+    if (Array.isArray(v) && v.length && v[0] !== null && typeof v[0] === 'object') return v;
+  }
+  // Repli : la plus longue liste de points, cherchée aussi dans les sous-objets
+  // (ex. { results: { states: [...] } } ou { results: { timestamps: [...], ... } }).
   let best = [];
   for (const k of Object.keys(json)) {
     const v = json[k];
-    const cand = Array.isArray(v) ? (v.length && typeof v[0] === 'object' ? v : []) : findRecords(v, depth - 1);
+    // Tableau : retenu seulement si c'est une liste d'objets (pas une colonne de valeurs).
+    const cand = findRecords(v, depth - 1);
     if (cand.length > best.length) best = cand;
   }
   return best;
@@ -152,7 +185,7 @@ export function formatReport(sum, { requested } = {}) {
     ...sum.fields.map((f) => `  ${f.path ? '✓' : '✗'} ${f.name}`
       + (f.path ? ` — ${f.path} — ${(f.filled * 100).toFixed(0)} % des points — ex. ${JSON.stringify(f.sample)}` : '')),
     '',
-    `Clés du 1er point : ${sum.firstKeys.join(', ') || '—'}`,
+    `Colonnes / clés (${sum.firstKeys.length}) : ${sum.firstKeys.join(', ') || '—'}`,
   ];
   return lines.filter((l) => l != null).join('\n');
 }
