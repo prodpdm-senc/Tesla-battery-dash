@@ -16,7 +16,8 @@ class TimeChart {
    * @param {HTMLElement} el
    * @param {{key:string,label:string,color:string,unit:string,fmt?:(v:number)=>string}[]} series
    */
-  constructor(el, { series, unit, height = 220, yMinSpan = 5, showX = true, area = null, zero = false, valueLabels = true }) {
+  constructor(el, { series, unit, height = 220, yMinSpan = 5, showX = true, area = null, zero = false, valueLabels = true, extraTip = [] }) {
+    this.extraTip = extraTip; // valeurs ajoutées à l'infobulle seulement (pas de courbe)
     this.el = el;
     this.showX = showX;       // le graphique du haut cache ses heures (même axe que celui du bas)
     this.areaKey = area;      // série remplie jusqu'à zéro
@@ -146,14 +147,15 @@ class TimeChart {
     const lines = this.gLines.selectAll('path.series').data(this.series, (s) => s.key);
     lines.join('path').attr('class', 'series').attr('stroke', (s) => css(s.color))
       .attr('d', (s) => d3.line().defined((d) => d[s.key] != null)
-        .x((d) => x(d.t)).y((d) => y(d[s.key])).curve(d3.curveMonotoneX)(data));
+        .x((d) => x(d.t)).y((d) => y(d[s.key])).curve(d3.curveMonotoneX)(s.connect ? data.filter((d) => d[s.key] != null) : data));
 
     // Point à la fin de chaque série + valeur actuelle à droite.
     const last = data[data.length - 1];
-    const ends = this.series.filter((s) => last && last[s.key] != null)
-      .map((s) => ({ s, cy: y(last[s.key]), y: y(last[s.key]) }));
+    const lastOf = (s) => (s.connect ? data.slice().reverse().find((d) => d[s.key] != null) : last);
+    const ends = this.series.map((s) => ({ s, p: lastOf(s) })).filter((e) => e.p && e.p[e.s.key] != null)
+      .map((e) => ({ s: e.s, p: e.p, cy: y(e.p[e.s.key]), y: y(e.p[e.s.key]) }));
     this.gLabels.selectAll('circle').data(ends, (d) => d.s.key).join('circle')
-      .attr('class', 'end-dot').attr('r', 4).attr('cx', last ? x(last.t) : 0).attr('cy', (d) => d.cy)
+      .attr('class', 'end-dot').attr('r', 4).attr('cx', (d) => x(d.p.t)).attr('cy', (d) => d.cy)
       .attr('fill', (d) => css(d.s.color));
     // Valeurs masquées quand la projection part du même point (elles sont dans le résumé).
     const labels = this.valueLabels && !this.extras.projection ? ends.slice().sort((a, b) => a.y - b.y) : [];
@@ -162,8 +164,8 @@ class TimeChart {
     }
     this.gLabels.selectAll('text').data(labels, (d) => d.s.key).join('text')
       .attr('class', 'value-label')
-      .attr('x', last ? Math.min(x(last.t) + 9, M.left + iw + 6) : 0).attr('y', (d) => d.y).attr('dy', '0.32em')
-      .text((d) => (d.s.fmt ? d.s.fmt(last[d.s.key]) : last[d.s.key].toFixed(1)));
+      .attr('x', (d) => Math.min(x(d.p.t) + 9, M.left + iw + 6)).attr('y', (d) => d.y).attr('dy', '0.32em')
+      .text((d) => (d.s.fmt ? d.s.fmt(d.p[d.s.key]) : d.p[d.s.key].toFixed(1)));
 
     this.overlay.attr('x', M.left).attr('y', M.top).attr('width', iw).attr('height', ih);
     this.gHover.select('line.crosshair').attr('y1', M.top).attr('y2', M.top + ih);
@@ -194,7 +196,8 @@ class TimeChart {
       const txt = v == null ? '—' : (s.fmt ? s.fmt(v) : v.toFixed(1));
       return `<div class="tip-row"><span class="swatch" style="background:${css(s.color)}"></span>`
         + `<span class="tip-label">${s.label}</span><span class="tip-val">${txt} ${s.unit}</span></div>`;
-    }).join('');
+    }).join('') + this.extraTip.filter((e) => d[e.key] != null).map((e) =>
+      `<div class="tip-row"><span class="swatch"></span><span class="tip-label">${e.label}</span><span class="tip-val">${d[e.key].toFixed(1)} °C</span></div>`).join('');
     this.tip.html(`<div class="tip-time">${d3.timeFormat('%H:%M:%S')(d.t)}</div>${rows}`)
       .attr('hidden', null);
     const box = this.el.getBoundingClientRect();
@@ -204,14 +207,14 @@ class TimeChart {
   }
 }
 
-export function createCharts({ tempEl, powerEl }) {
+export function createCharts({ tempEl, motorEl }) {
   // Si le CDN de D3 est inaccessible, le reste du dashboard fonctionne quand même.
   if (typeof d3 === 'undefined') {
-    for (const el of [tempEl, powerEl]) {
+    for (const el of [tempEl, motorEl]) {
       el.innerHTML = '<p class="muted small">Graphique indisponible (la librairie D3 n’a pas pu être chargée).</p>';
     }
     const noop = { update() {} };
-    return { temp: noop, power: noop };
+    return { temp: noop, motor: noop };
   }
   const temp = new TimeChart(tempEl, {
     unit: '°C', height: 260, yMinSpan: 10, showX: false,
@@ -220,12 +223,15 @@ export function createCharts({ tempEl, powerEl }) {
       { key: 'tempMin', label: 'Module min', short: 'min', color: '--series-1', unit: '°C' },
     ],
   });
-  const power = new TimeChart(powerEl, {
-    unit: 'kW', height: 180, yMinSpan: 10, area: 'powerKw', zero: true,
+  // Unité d'entraînement arrière : sur une Model 3 LFP, c'est elle qui chauffe la batterie.
+  // Un point par minute au mieux (Fleet Telemetry) : les courbes relient les points disponibles.
+  const motor = new TimeChart(motorEl, {
+    unit: '°C', height: 180, yMinSpan: 10,
     series: [
-      { key: 'powerKw', label: 'Pack (V × I)', short: 'pack', color: '--series-1', unit: 'kW' },
-      { key: 'chargerPowerKw', label: 'Chargeur', short: 'chargeur', color: '--series-3', unit: 'kW', fmt: (v) => v.toFixed(0) },
+      { key: 'statorTemp', label: 'Stator', short: 'stator', color: '--series-4', unit: '°C', connect: true },
+      { key: 'inverterTemp', label: 'Onduleur', short: 'onduleur', color: '--series-2', unit: '°C', connect: true },
+      { key: 'heatsinkTemp', label: 'Dissipateur', short: 'dissip.', color: '--series-1', unit: '°C', connect: true },
     ],
   });
-  return { temp, power };
+  return { temp, motor };
 }

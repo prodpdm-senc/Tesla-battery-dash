@@ -8,7 +8,7 @@ Données via l'API de [Tessie](https://developer.tessie.com). Page statique, san
 
 - **Graphique de température** : module min et max (bande), ligne de cible et projection pointillée jusqu'à la cible.
 - **ETA** : temps restant, heure d'arrivée et plage d'incertitude.
-- **Puissance** : pack (V × I) et chargeur, en kW.
+- **Moteur arrière** (graphique du bas) : températures du stator, de l'onduleur et du dissipateur de l'unité arrière. Sur une Model 3 LFP, c'est surtout ce moteur, opéré de façon volontairement inefficace, qui chauffe le glycol puis la batterie. La puissance reste dans les jauges.
 - **Jauges en barres verticales** (panneau de gauche) : tension, courant, puissance, charge (avec repère de la limite), chargeur et température extérieure, avec la valeur en texte dessous. Les grandeurs signées partent d'une ligne du zéro : vers le haut si positif, vers le bas si négatif. Les échelles fixes se modifient dans `GAUGES` (`js/app.js`).
 - **États** : recharge, chauffage batterie, préconditionnement.
 - **Fins de chauffe observées** (dans Réglages) : la température est notée quand le préconditionnement se termine, ou quand la puissance consommée chute alors que l'auto est stationnée et le préconditionnement encore actif. Le drapeau « chauffage batterie » ne suffit pas : il peut rester faux pendant la chauffe. Ça permet de **calibrer la vraie cible du BMS** (voir plus bas).
@@ -35,6 +35,16 @@ Il n'est jamais envoyé ailleurs qu'à l'API configurée.
 ### Si ça bloque (« Requête bloquée (réseau ou CORS) »)
 
 Il faut confirmer que `api.tessie.com` accepte les appels directs depuis un navigateur. Si ce n'est pas le cas, la solution prévue est un petit proxy (par exemple un Cloudflare Worker) qui garde le token côté serveur. Il suffit ensuite de changer l'**URL de l'API** dans *Réglages → Avancé*, sans toucher au code.
+
+## Températures du moteur (Fleet Telemetry)
+
+Tesla peut transmettre `DiStatorTempR`, `DiInverterTR` et `DiHeatsinkTR` (stator, onduleur, dissipateur arrière ; 1 point / min au mieux, logiciel 2024.26+), mais ils ne font pas partie de la configuration de télémétrie par défaut de Tessie. Dans *Réglages → Avancé → Moteur arrière* :
+
+- **Vérifier** (lecture seule) : champs configurés, valeurs trouvées dans l'état et dans l'historique de la dernière heure.
+- **Activer ces 3 champs** : lit la configuration actuelle et y **ajoute** les 3 champs (aux 60 s), sans retirer ni modifier les autres. Si la configuration est illisible, rien n'est envoyé. Une confirmation est demandée.
+- **Tester le flux (60 s)** : écoute le flux en direct de Tessie et liste les champs reçus.
+
+L'unité de ces températures n'est pas documentée officiellement (°C supposé) : à vérifier avec les premières valeurs réelles.
 
 ## Page Sessions
 
@@ -121,6 +131,7 @@ js/history.js       analyse de l'historique Tessie (pur, testé)
 js/events.js        détection des fins de chauffe (pur, testé)
 js/sessions.js      détection des chauffes et des recharges dans l'historique (pur, testé)
 js/sessionsView.js  page Sessions (listes et graphiques)
+js/telemetry.js     télémétrie du moteur arrière : configuration, lecture, flux (testé)
 js/simulator.js     mode démo
 js/store.js         stockage local (réglages, historique)
 test/               tests node:test

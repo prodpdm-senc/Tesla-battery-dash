@@ -1,6 +1,8 @@
 // Client Tessie minimal + normalisation des données en un « échantillon » plat.
 // Docs : https://developer.tessie.com
 
+import { pickStatorTemp } from './telemetry.js?v=15';
+
 export class ApiError extends Error {
   constructor(message, { status = 0, kind = 'http' } = {}) {
     super(message);
@@ -16,13 +18,19 @@ export class TessieClient {
     this.timeoutMs = timeoutMs;
   }
 
-  async get(path) {
+  get(path) { return this.request('GET', path); }
+  post(path, body) { return this.request('POST', path, body); }
+
+  async request(method, path, body) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
     let res;
     try {
       res = await fetch(`${this.baseUrl}${path}`, {
-        headers: { Authorization: `Bearer ${this.token}`, Accept: 'application/json' },
+        method,
+        headers: Object.assign({ Authorization: `Bearer ${this.token}`, Accept: 'application/json' },
+          body ? { 'Content-Type': 'application/json' } : {}),
+        body: body ? JSON.stringify(body) : undefined,
         signal: ctrl.signal,
         cache: 'no-store',
       });
@@ -47,6 +55,9 @@ export class TessieClient {
   vehicles() { return this.get('/vehicles?only_active=true'); }
   /** Historique. Paramètres from/to en secondes ; interval=1 → tous les points. */
   states(vin, query) { return this.get(`/${encodeURIComponent(vin)}/states?${query}`); }
+  /** Configuration Fleet Telemetry (champs transmis par l'auto). */
+  telemetryConfig(vin) { return this.get(`/${encodeURIComponent(vin)}/fleet_telemetry_config`); }
+  setTelemetryConfig(vin, body) { return this.post(`/${encodeURIComponent(vin)}/fleet_telemetry_config`, body); }
   battery(vin) { return this.get(`/${encodeURIComponent(vin)}/battery`); }
   // use_cache=true : ne réveille pas l'auto.
   state(vin) { return this.get(`/${encodeURIComponent(vin)}/state?use_cache=true`); }
@@ -113,6 +124,10 @@ export function normalize(battery, state) {
     minutesToFull: num(cs.minutes_to_full_charge),
     chargeLimit: num(cs.charge_limit_soc),
     vehicleState: st.state || null,
+    // Moteur arrière (chauffe la batterie sur une Model 3 LFP), si la télémétrie le transmet.
+    statorTemp: pickStatorTemp(st),
+    inverterTemp: pickStatorTemp(st, 'inverter'),
+    heatsinkTemp: pickStatorTemp(st, 'heatsink'),
     shiftState: ds.shift_state || null,
     speed: num(ds.speed),
   };
