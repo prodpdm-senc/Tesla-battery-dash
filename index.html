@@ -7,7 +7,7 @@
 <meta name="description" content="Température de batterie, préconditionnement et recharge rapide en direct via Tessie.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=13">
+<link rel="stylesheet" href="css/style.css?v=14">
 <script>
   // Script classique (sans module) : s'exécute même sur un navigateur ancien.
   // Affiche les erreurs à l'écran, puisque le navigateur de l'auto n'a pas de console.
@@ -33,7 +33,7 @@
   })();
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
-<script type="module" src="js/app.js?v=13"></script>
+<script type="module" src="js/app.js?v=14"></script>
 </head>
 <body>
 <main class="container">
@@ -149,7 +149,7 @@
         <ul class="sess-list" id="heatList"></ul>
       </section>
       <section class="card sess-card">
-        <h2>Recharges <span class="muted" id="chargeCount"></span></h2>
+        <h2>Recharges rapides (DC) <span class="muted" id="chargeCount"></span></h2>
         <ul class="sess-list" id="chargeList"></ul>
       </section>
     </div>
@@ -160,7 +160,7 @@
         <div class="chart" id="chartHeat" data-label="Température pendant chaque chauffe"></div>
       </section>
       <section class="card">
-        <div class="card-head"><div class="card-title"><h2>Courbes de recharge</h2>
+        <div class="card-head"><div class="card-title"><h2>Courbes de recharge rapide</h2>
           <div class="legend ramp-legend" id="chargeLegend"></div></div></div>
         <div class="chart" id="chartCharge" data-label="Puissance de recharge selon le pourcentage de charge"></div>
       </section>

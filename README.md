@@ -41,7 +41,7 @@ Il faut confirmer que `api.tessie.com` accepte les appels directs depuis un navi
 Bouton **Direct / Sessions** en haut. La page Sessions lit l'historique de Tessie (24 h, 7 jours ou 30 jours) et détecte :
 
 - **Chauffes de batterie** (préconditionnement, à l'arrêt ou en roulant) : montée de la température du module le plus froid d'au moins 0,25 °C/min (régression sur une fenêtre glissante), hors recharge. Pour chacune : températures de départ et d'arrivée, durée, °C/min, température extérieure, énergie consommée (à l'arrêt seulement : en roulant, la propulsion s'y mêle), et la recharge qui a suivi. Bouton **Utiliser comme cible**.
-- **Recharges** : % de départ et d'arrivée, énergie ajoutée, puissance de pointe et moyenne, durée, température de la batterie au branchement.
+- **Recharges rapides (DC)** : % de départ et d'arrivée, énergie ajoutée, puissance de pointe et moyenne, durée, température de la batterie au branchement. Les recharges AC (maison, pointe < 25 kW) ne sont pas affichées : la température de la batterie n'y limite pas la puissance. Leur nombre est indiqué dans le résumé de la période.
 - **Graphiques** : courbes de chauffe superposées (depuis le début de chaque chauffe) et puissance de recharge selon le % de charge, colorée du bleu (batterie froide) à l'ambre (batterie chaude).
 
 Tessie n'enregistre pas l'état « préconditionnement » : les chauffes sont déduites de la température. Sur 7 et 30 jours, les points sont demandés aux 60 s et aux 5 min pour garder la réponse légère.
