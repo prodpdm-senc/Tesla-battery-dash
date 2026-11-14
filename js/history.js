@@ -190,3 +190,80 @@ export function formatReport(sum, opts = {}) {
   ];
   return lines.filter((l) => l != null).join('\n');
 }
+
+// ───────────── Historique → échantillons (même forme que les mesures en direct) ─────────────
+
+function numOrNull(v) {
+  const n = typeof v === 'string' ? Number(v) : v;
+  return typeof n === 'number' && Number.isFinite(n) ? n : null;
+}
+function boolOrNull(v) {
+  if (typeof v === 'boolean') return v;
+  if (v === 0 || v === 1) return v === 1;
+  return null;
+}
+/** Température plausible d'un module, sinon null (lectures absurdes pendant le sommeil). */
+function tempOrNull(v) {
+  const n = numOrNull(v);
+  return n != null && n > -40 && n < 80 ? n : null;
+}
+
+/**
+ * Réponse de /{vin}/states (format en colonnes ou liste) → échantillons triés par temps,
+ * avec la même convention que le direct (normalize dans tessie.js) :
+ * courant et puissance positifs = énergie qui SORT de la batterie.
+ * Une tension sous 200 V (ex. 4,68 V observé, auto endormie) est écartée.
+ */
+export function statesToSamples(json) {
+  const out = [];
+  for (const r of findRecords(json)) {
+    const t = toMs(r.timestamp);
+    if (t == null) continue;
+    const v = numOrNull(r.pack_voltage);
+    const voltage = v != null && v >= 200 ? v : null;
+    const raw = numOrNull(r.pack_current);
+    const current = voltage != null && raw != null ? -raw : null;
+    out.push({
+      t,
+      tempMin: tempOrNull(r.module_temp_min),
+      tempMax: tempOrNull(r.module_temp_max),
+      voltage,
+      current,
+      powerKw: voltage != null && current != null ? (voltage * current) / 1000 : null,
+      soc: numOrNull(r.battery_level),
+      energyKwh: numOrNull(r.energy_remaining),
+      chargerPowerKw: numOrNull(r.charger_power),
+      chargerVoltage: numOrNull(r.charger_voltage),
+      chargerCurrent: numOrNull(r.charger_actual_current),
+      chargeEnergyAdded: numOrNull(r.charge_energy_added),
+      chargingState: r.charging_state || null,
+      heaterOn: boolOrNull(r.battery_heater_on),
+      climateOn: boolOrNull(r.is_climate_on),
+      outsideTemp: numOrNull(r.outside_temp),
+      speed: numOrNull(r.speed),
+      shiftState: r.shift_state || null,
+      vehicleState: r.state || null,
+      fromHistory: true,
+    });
+  }
+  return out.sort((a, b) => a.t - b.t);
+}
+
+/**
+ * Fusionne l'historique Tessie avec les échantillons locaux (direct).
+ * Un point local garde la priorité s'il tombe à moins de `tolMs` d'un point Tessie.
+ */
+export function mergeSamples(local, remote, tolMs = 5000) {
+  const all = local.map((s) => ({ s, local: true })).concat(remote.map((s) => ({ s, local: false })));
+  all.sort((a, b) => a.s.t - b.s.t || (a.local ? -1 : 1));
+  const out = [];
+  for (const { s, local } of all) {
+    const prev = out[out.length - 1];
+    if (prev && s.t - prev.s.t < tolMs) {
+      if (local && !prev.local) out[out.length - 1] = { s, local };
+      continue;
+    }
+    out.push({ s, local });
+  }
+  return out.map((x) => x.s);
+}

@@ -36,6 +36,18 @@ Il n'est jamais envoyé ailleurs qu'à l'API configurée.
 
 Il faut confirmer que `api.tessie.com` accepte les appels directs depuis un navigateur. Si ce n'est pas le cas, la solution prévue est un petit proxy (par exemple un Cloudflare Worker) qui garde le token côté serveur. Il suffit ensuite de changer l'**URL de l'API** dans *Réglages → Avancé*, sans toucher au code.
 
+## Page Sessions
+
+Bouton **Direct / Sessions** en haut. La page Sessions lit l'historique de Tessie (24 h, 7 jours ou 30 jours) et détecte :
+
+- **Chauffes de batterie** (préconditionnement, à l'arrêt ou en roulant) : montée de la température du module le plus froid d'au moins 0,25 °C/min (régression sur une fenêtre glissante), hors recharge. Pour chacune : températures de départ et d'arrivée, durée, °C/min, température extérieure, énergie consommée (à l'arrêt seulement : en roulant, la propulsion s'y mêle), et la recharge qui a suivi. Bouton **Utiliser comme cible**.
+- **Recharges** : % de départ et d'arrivée, énergie ajoutée, puissance de pointe et moyenne, durée, température de la batterie au branchement.
+- **Graphiques** : courbes de chauffe superposées (depuis le début de chaque chauffe) et puissance de recharge selon le % de charge, colorée du bleu (batterie froide) à l'ambre (batterie chaude).
+
+Tessie n'enregistre pas l'état « préconditionnement » : les chauffes sont déduites de la température. Sur 7 et 30 jours, les points sont demandés aux 60 s et aux 5 min pour garder la réponse légère.
+
+À l'ouverture, la vue Direct se remplit aussi avec les dernières heures de l'historique Tessie.
+
 ## Dans la Tesla
 
 Le navigateur de l'auto est un Chromium parfois ancien (version 79 sur certains véhicules), sans console de débogage. Le dashboard en tient compte :
@@ -91,7 +103,6 @@ Chaque fichier est chargé avec un numéro de version dans son adresse (`?v=11`)
 ## Pistes pour la suite
 
 - Proxy Cloudflare Worker : token secret et historique enregistré même page fermée.
-- Pré-remplir le graphique avec l'endpoint d'historique de Tessie (`/{vin}/states`).
 - Modèle thermique du 1er ordre (exponentiel) au lieu d'une droite, plus juste près de la cible.
 - Courbe de puissance de recharge en fonction du SOC et de la température.
 
@@ -107,6 +118,8 @@ js/charts.js        graphiques D3
 js/gauges.js        jauges en barres verticales
 js/history.js       analyse de l'historique Tessie (pur, testé)
 js/events.js        détection des fins de chauffe (pur, testé)
+js/sessions.js      détection des chauffes et des recharges dans l'historique (pur, testé)
+js/sessionsView.js  page Sessions (listes et graphiques)
 js/simulator.js     mode démo
 js/store.js         stockage local (réglages, historique)
 test/               tests node:test
