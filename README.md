@@ -84,6 +84,10 @@ Pour trouver la vraie valeur sur ton auto :
 
 *Réglages → Avancé → Tester l'historique Tessie* lit l'historique (`/{vin}/states`) sur 6 h, puis 48 h, puis 7 jours jusqu'à trouver des points (une auto endormie n'en ajoute pas), et affiche un rapport : nombre de points, intervalle réel entre les points, et champs disponibles (températures des modules, tension, courant, chauffage, etc.). Ce rapport sert à concevoir la future page « Sessions ». Il ne contient ni le token, ni le VIN, ni de position.
 
+## Mise à jour et cache
+
+Chaque fichier est chargé avec un numéro de version dans son adresse (`?v=11`), pour que les navigateurs (Chrome sur iPhone, navigateur de l'auto) ne gardent pas une ancienne version en mémoire. **À chaque mise en ligne, augmenter `APP_VERSION` dans `js/app.js` et les `?v=` correspondants** ; `test/version.test.mjs` échoue si un numéro est oublié. La version courante s'affiche dans *Réglages → Avancé* et en tête du rapport d'historique.
+
 ## Pistes pour la suite
 
 - Proxy Cloudflare Worker : token secret et historique enregistré même page fermée.

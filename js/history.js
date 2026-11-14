@@ -169,10 +169,11 @@ export function summarize(json) {
 }
 
 /** Rapport texte à copier-coller. */
-export function formatReport(sum, { requested } = {}) {
+export function formatReport(sum, opts = {}) {
+  const { requested } = opts;
   const d = (t) => (t == null ? '—' : new Date(t).toISOString().replace('T', ' ').slice(0, 19) + ' UTC');
   const lines = [
-    'RAPPORT HISTORIQUE TESSIE',
+    `RAPPORT HISTORIQUE TESSIE${opts && opts.version ? ` (version ${opts.version})` : ''}`,
     requested ? `Demandé : ${requested}` : null,
     `Enveloppe : ${sum.envelope || '—'}`,
     `Structure : ${sum.shape || '—'}`,

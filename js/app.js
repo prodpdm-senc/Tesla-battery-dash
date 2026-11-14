@@ -1,11 +1,16 @@
-import { TessieClient, ApiError } from './tessie.js';
-import { Simulator } from './simulator.js';
-import { estimate, pickTemp, formatDuration } from './estimator.js';
-import { settings as settingsStore, history, observations, appendSample } from './store.js';
-import { createCharts } from './charts.js';
-import { Gauges } from './gauges.js';
-import { summarize, formatReport } from './history.js';
-import { detectHeatingEnd } from './events.js';
+import { TessieClient, ApiError } from './tessie.js?v=11';
+import { Simulator } from './simulator.js?v=11';
+import { estimate, pickTemp, formatDuration } from './estimator.js?v=11';
+import { settings as settingsStore, history, observations, appendSample } from './store.js?v=11';
+import { createCharts } from './charts.js?v=11';
+import { Gauges } from './gauges.js?v=11';
+import { summarize, formatReport } from './history.js?v=11';
+import { detectHeatingEnd } from './events.js?v=11';
+
+// Version de l'app. Le même numéro est ajouté à l'adresse de chaque fichier (?v=…)
+// pour forcer les navigateurs (Chrome iPhone, auto) à charger la nouvelle version.
+// À augmenter à chaque mise en ligne ; test/version.test.mjs vérifie la cohérence.
+export const APP_VERSION = '11';
 
 const DEFAULTS = {
   vin: '',
@@ -424,7 +429,7 @@ function openSettings(message, focus) {
   const f = $('settingsForm').elements;
   f.token.value = state.s.token || '';
   f.rememberToken.checked = !!state.s.rememberToken || (IS_CAR && !state.s.token);
-  $('uaInfo').textContent = `Navigateur : ${navigator.userAgent}`;
+  $('uaInfo').textContent = `Version ${APP_VERSION} · Navigateur : ${navigator.userAgent}`;
   $('carLink').hidden = true; $('carLinkHelp').hidden = true;
   f.vin.value = state.s.vin || '';
   f.target.value = state.s.target;
@@ -521,7 +526,7 @@ async function testHistory() {
     formMsg('L’historique n’a pas pu être lu.', 'error');
     return;
   }
-  out.textContent = formatReport(r.sum, { requested: `/states?${hide(r.q)} (${r.w.label})` })
+  out.textContent = formatReport(r.sum, { requested: `/states?${hide(r.q)} (${r.w.label})`, version: APP_VERSION })
     + `\n\nEssais : ${log.join(' ; ')}${stateLine}`
     + `\nNavigateur : ${navigator.userAgent}`;
   $('btnHistCopy').hidden = false;
