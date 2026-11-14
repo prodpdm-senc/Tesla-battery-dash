@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Batterie Tesla — Dashboard</title>
+<meta name="description" content="Température de batterie, préconditionnement et recharge rapide en direct via Tessie.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script type="module" src="js/app.js"></script>
+</head>
+<body>
+<main class="container">
+
+  <header class="header">
+    <div>
+      <div class="status" id="status" data-state="idle">
+        <span class="status-dot"></span><span id="statusText">Hors ligne</span>
+      </div>
+      <h1>Batterie</h1>
+      <p class="subtitle" id="subtitle">Préconditionnement &amp; recharge rapide</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn" id="btnDemo" type="button" aria-pressed="false">Démo</button>
+      <button class="btn" id="btnRefresh" type="button" title="Actualiser maintenant">↻</button>
+      <button class="btn btn-primary" id="btnSettings" type="button">Réglages</button>
+    </div>
+  </header>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <section class="hero" aria-label="Résumé">
+    <div class="hero-main">
+      <div class="label">Cible atteinte dans</div>
+      <div class="hero-value" id="etaValue">—</div>
+      <div class="hero-sub" id="etaSub">En attente de données</div>
+    </div>
+    <div class="hero-stats">
+      <div class="stat">
+        <div class="label">Batterie (min / max)</div>
+        <div class="stat-value"><span id="tNow">—</span><span class="unit">°C</span></div>
+        <div class="stat-sub" id="tRange">—</div>
+      </div>
+      <div class="stat">
+        <div class="label">Cible</div>
+        <div class="stat-value">
+          <button class="target-btn" id="btnTarget" type="button" title="Modifier la cible"><span id="tTarget">—</span><span class="unit">°C</span></button>
+        </div>
+        <div class="stat-sub" id="tTargetSub">LFP · à calibrer</div>
+      </div>
+      <div class="stat">
+        <div class="label">Taux de chauffe</div>
+        <div class="stat-value"><span id="rate">—</span><span class="unit">°C/min</span></div>
+        <div class="stat-sub" id="rateSub">fenêtre 5 min</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>Température des modules</h2>
+        <div class="legend">
+          <span class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>Module min</span>
+          <span class="legend-item"><span class="swatch" style="background:var(--series-2)"></span>Module max</span>
+          <span class="legend-item"><span class="swatch swatch-dash"></span>Cible / projection</span>
+        </div>
+      </div>
+      <div class="seg" role="group" aria-label="Fenêtre de temps" id="rangeSeg">
+        <button type="button" data-min="15">15 min</button>
+        <button type="button" data-min="60" aria-pressed="true">1 h</button>
+        <button type="button" data-min="180">3 h</button>
+        <button type="button" data-min="720">12 h</button>
+      </div>
+    </div>
+    <div class="chart" id="chartTemp" data-label="Température des modules de batterie dans le temps"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>Puissance</h2>
+        <div class="legend">
+          <span class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>Pack (V × I)</span>
+          <span class="legend-item"><span class="swatch" style="background:var(--series-3)"></span>Chargeur</span>
+        </div>
+      </div>
+    </div>
+    <div class="chart" id="chartPower" data-label="Puissance du pack et du chargeur dans le temps"></div>
+  </section>
+
+  <section class="tiles" id="tiles" aria-label="Valeurs en direct"></section>
+
+  <section class="card" id="obsCard" hidden>
+    <h2>Coupures du chauffage observées</h2>
+    <p class="muted small">Température du module le plus froid quand le chauffage batterie s'est arrêté. Indice de la vraie cible du BMS.</p>
+    <ul class="obs-list" id="obsList"></ul>
+  </section>
+
+  <footer class="footer muted small">
+    Données via <a href="https://tessie.com" target="_blank" rel="noopener">Tessie</a> · mises en cache par Tessie, l'auto n'est pas réveillée.
+    Le token reste dans ce navigateur. <span id="lastUpdate"></span>
+  </footer>
+</main>
+
+<dialog id="settings">
+  <form method="dialog" id="settingsForm">
+    <h2>Réglages</h2>
+
+    <label>Token API Tessie
+      <input type="password" name="token" autocomplete="off" spellcheck="false" placeholder="tessie.com → Settings → API">
+    </label>
+    <label class="check"><input type="checkbox" name="rememberToken"> Se souvenir du token sur cet appareil</label>
+
+    <label>VIN
+      <div class="row">
+        <input type="text" name="vin" autocomplete="off" spellcheck="false" placeholder="5YJ…">
+        <button class="btn" type="button" id="btnFindVin">Trouver</button>
+      </div>
+    </label>
+    <select id="vinList" hidden></select>
+
+    <div class="grid2">
+      <label>Cible (°C)
+        <input type="number" name="target" min="0" max="70" step="0.5">
+      </label>
+      <label>Intervalle (s)
+        <input type="number" name="interval" min="10" max="600" step="5">
+      </label>
+      <label>Température suivie
+        <select name="metric">
+          <option value="min">Module min (conservateur)</option>
+          <option value="avg">Moyenne min/max</option>
+          <option value="max">Module max</option>
+        </select>
+      </label>
+      <label>Fenêtre de régression (min)
+        <input type="number" name="windowMin" min="2" max="30" step="1">
+      </label>
+    </div>
+
+    <details>
+      <summary>Avancé</summary>
+      <label>URL de l'API (proxy éventuel)
+        <input type="url" name="baseUrl" spellcheck="false">
+      </label>
+      <button class="btn btn-danger" type="button" id="btnClearHist">Effacer l'historique local</button>
+    </details>
+
+    <p class="form-msg" id="formMsg" role="status"></p>
+    <div class="dialog-actions">
+      <button class="btn" value="cancel" formnovalidate>Annuler</button>
+      <button class="btn btn-primary" value="save" id="btnSave">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+</body>
+</html>
