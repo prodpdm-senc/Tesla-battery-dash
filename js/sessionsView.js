@@ -4,8 +4,8 @@
 
 /* global d3 */
 
-import { statesToSamples } from './history.js?v=13';
-import { detectChargingSessions, detectHeatingSessions, linkHeatingToCharging } from './sessions.js?v=13';
+import { statesToSamples } from './history.js?v=14';
+import { detectChargingSessions, detectHeatingSessions, linkHeatingToCharging } from './sessions.js?v=14';
 
 const MIN = 60000;
 // interval = secondes entre deux points demandés à Tessie (réponse plus légère sur de longues périodes).
@@ -121,14 +121,19 @@ export class SessionsView {
   }
 
   analyse(samples, note) {
-    this.charges = detectChargingSessions(samples).reverse();               // plus récentes d'abord
+    // Recharges rapides (DC) seulement : à la maison (AC, ~7-11 kW), la température de la
+    // batterie ne limite pas la puissance, donc rien à analyser.
+    const allCharges = detectChargingSessions(samples);
+    this.acHidden = allCharges.filter((c) => !c.dc).length;
+    this.charges = allCharges.filter((c) => c.dc).reverse();                 // plus récentes d'abord
     this.heats = linkHeatingToCharging(detectHeatingSessions(samples), this.charges).reverse();
     this.sel = this.heats.length ? { kind: 'heat', i: 0 } : this.charges.length ? { kind: 'charge', i: 0 } : null;
     const p = PERIODS[this.period];
     const span = samples.length ? `${samples.length} points` : 'aucun point';
     const iv = this.intervalByKey && this.intervalByKey[this.period];
     const step = iv && iv > 1 ? ` (1 pt / ${iv >= 60 ? `${iv / 60} min` : `${iv} s`} max)` : '';
-    this.msg(note || `${p.label} · ${span}${step} · ${this.heats.length} chauffe(s) · ${this.charges.length} recharge(s)`);
+    const ac = this.acHidden ? ` (${this.acHidden} AC non affichée${this.acHidden > 1 ? 's' : ''})` : '';
+    this.msg(note || `${p.label} · ${span}${step} · ${this.heats.length} chauffe(s) · ${this.charges.length} recharge(s) DC${ac}`);
     this.render();
   }
 
@@ -142,15 +147,15 @@ export class SessionsView {
       <li class="sess-row" data-kind="heat" data-i="${i}" aria-selected="${sel.kind === 'heat' && sel.i === i}">
         <div class="sess-top"><span>${esc(day(h.t0))} · ${hm(h.t0)}</span><span class="sess-big">${f1(h.tempStart)} → ${f1(h.tempEnd)} °C</span></div>
         <div class="sess-sub">${dur(h.durationMs)} · ${f1(h.ratePerMin, 2)} °C/min · ext. ${f1(h.outsideTemp, 0)} °C · ${h.moving ? 'en roulant' : `${f1(h.energyKwh)} kWh`}</div>
-        ${h.nextCharge ? `<div class="sess-sub">→ recharge ${h.nextCharge.dc ? 'DC' : 'AC'} à ${f1(h.nextCharge.tempStart)} °C, pic ${f1(h.nextCharge.peakKw, 0)} kW</div>` : ''}
+        ${h.nextCharge ? `<div class="sess-sub">→ recharge rapide à ${f1(h.nextCharge.tempStart)} °C, pic ${f1(h.nextCharge.peakKw, 0)} kW</div>` : ''}
         <button class="btn sess-btn" type="button" data-target="${h.tempEnd}">Utiliser ${f1(h.tempEnd)} °C comme cible</button>
       </li>`).join('') : '<li class="sess-empty">Aucune chauffe détectée sur cette période.</li>';
     $('chargeList').innerHTML = this.charges.length ? this.charges.map((c, i) => `
       <li class="sess-row" data-kind="charge" data-i="${i}" aria-selected="${sel.kind === 'charge' && sel.i === i}">
-        <div class="sess-top"><span>${esc(day(c.t0))} · ${hm(c.t0)} · ${c.dc ? 'DC' : 'AC'}</span><span class="sess-big">${f1(c.socStart, 0)} → ${f1(c.socEnd, 0)} %</span></div>
+        <div class="sess-top"><span>${esc(day(c.t0))} · ${hm(c.t0)}</span><span class="sess-big">${f1(c.socStart, 0)} → ${f1(c.socEnd, 0)} %</span></div>
         <div class="sess-sub">+${f1(c.energyKwh)} kWh · pic ${f1(c.peakKw, 0)} kW · moy. ${f1(c.avgKw, 0)} kW · ${dur(c.durationMs)}</div>
         <div class="sess-sub">batterie ${f1(c.tempStart)} → ${f1(c.tempPeak)} °C · ext. ${f1(c.outsideTemp, 0)} °C</div>
-      </li>`).join('') : '<li class="sess-empty">Aucune recharge détectée sur cette période.</li>';
+      </li>`).join('') : '<li class="sess-empty">Aucune recharge rapide (DC) sur cette période.</li>';
 
     // Chauffes : température du module le plus froid depuis le début de la chauffe.
     const target = this.deps.getTarget();
