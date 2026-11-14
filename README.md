@@ -9,7 +9,8 @@ Données via l'API de [Tessie](https://developer.tessie.com). Page statique, san
 - **Graphique de température** : module min et max (bande), ligne de cible et projection pointillée jusqu'à la cible.
 - **ETA** : temps restant, heure d'arrivée et plage d'incertitude.
 - **Puissance** : pack (V × I) et chargeur, en kW.
-- **Valeurs en direct** : tension, courant, puissance, SOC, énergie restante, chargeur (kW, V, A), état de charge, chauffage batterie, préconditionnement, température extérieure.
+- **Jauges en barres verticales** (panneau de gauche) : tension, courant, puissance, charge (avec repère de la limite), chargeur et température extérieure, avec la valeur en texte dessous. Les grandeurs signées partent d'une ligne du zéro : vers le haut si positif, vers le bas si négatif. Les échelles fixes se modifient dans `GAUGES` (`js/app.js`).
+- **États** : recharge, chauffage batterie, préconditionnement.
 - **Coupures du chauffage observées** : chaque fois que le chauffage batterie passe d'actif à inactif, la température est notée. Ça permet de **calibrer la vraie cible du BMS** (voir plus bas).
 - **Mode démo** : préconditionnement simulé d'un pack LFP. Il sert à essayer le dashboard sans token.
 
@@ -94,6 +95,7 @@ js/app.js           boucle de lecture, rendu, réglages
 js/tessie.js        client API et normalisation des champs
 js/estimator.js     régression, EMA, ETA (pur, testé)
 js/charts.js        graphiques D3
+js/gauges.js        jauges en barres verticales
 js/simulator.js     mode démo
 js/store.js         stockage local (réglages, historique)
 test/               tests node:test
