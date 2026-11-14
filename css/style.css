@@ -71,6 +71,7 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+[hidden] { display: none !important; }
 body {
   font-family: var(--font);
   font-feature-settings: 'tnum' 1;
@@ -222,6 +223,29 @@ h2 { font-weight: 600; font-size: 14px; }
 .gauge-value .unit { font-size: 11px; }
 .gauge-sub { font-size: 10px; color: var(--text-secondary); margin-top: 1px; min-height: 1.3em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* ── Page Sessions ── */
+.view-sessions .rail, .view-sessions .col-main { display: none !important; }
+.sessions { display: grid; gap: 10px; }
+.sess-bar { display: flex; align-items: center; }
+.sess-bar .seg { flex: none; }
+.sess-msg { flex: 1 1 auto; min-width: 0; margin: 0 10px; font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sess-msg[data-kind="error"] { color: var(--critical); }
+.sess-lists, .sess-charts { display: grid; gap: 10px; min-height: 0; }
+.sess-card h2 { margin-bottom: 6px; }
+.sess-list { list-style: none; display: grid; gap: 6px; }
+.sess-row { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; cursor: pointer; border-left: 3px solid transparent; }
+.sess-row[aria-selected="true"] { border-left-color: var(--accent); background: var(--surface-3); }
+.sess-top { display: flex; justify-content: space-between; align-items: baseline; font-size: 11px; color: var(--text-secondary); }
+.sess-big { font-size: 15px; font-weight: 500; color: var(--text-primary); white-space: nowrap; margin-left: 8px; }
+.sess-sub { font-size: 11px; color: var(--text-secondary); margin-top: 3px; }
+.sess-btn { margin-top: 6px; font-size: 11px; padding: 5px 10px; }
+.sess-empty { font-size: 12px; color: var(--text-muted); padding: 6px 2px; }
+.ramp-legend { align-items: center; }
+.ramp-legend > span { margin-right: 6px; }
+.ramp { display: inline-block; width: 64px; height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--series-1), var(--series-2)); }
+.ramp-lbl { font-weight: 500; color: var(--text-primary); }
+.view-seg { margin-right: 4px; }
+
 /* ── Dialogue de réglages ── */
 dialog {
   margin: auto; border: none; border-radius: 14px;
@@ -270,15 +294,24 @@ dialog details summary { cursor: pointer; font-size: 12px; font-weight: 500; col
   body { padding: 10px 12px; }
   .container {
     max-width: none; height: calc(100vh - 20px); min-height: 440px;
-    grid-template-columns: minmax(200px, 32fr) minmax(0, 68fr);
+    /* Conduite à gauche : tout ce qui se touche (boutons, graphiques) du côté du conducteur,
+       les jauges (lecture seule) à droite. */
+    grid-template-columns: minmax(0, 68fr) minmax(200px, 32fr);
     grid-template-rows: auto auto minmax(0, 1fr);
     gap: 10px;
   }
   .header, .notices { grid-column: 1 / -1; }
   .header > * { margin-top: 0; }
+  /* Boutons à gauche (côté conducteur), titre à droite */
+  .header { flex-direction: row-reverse; }
+  .header > div:first-child { text-align: right; }
+  .header .status { justify-content: flex-end; }
+  /* Sélecteur de période au début de l'en-tête du graphique (à gauche) */
+  .card-head { justify-content: flex-start; }
+  #rangeSeg { order: -1; margin-right: 14px; flex: none; }
   .subtitle { display: none; }
 
-  .rail { grid-column: 1; grid-row: 3; order: 0; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+  .rail { grid-column: 2; grid-row: 3; order: 0; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
   /* Colonne étroite : une pastille par ligne, libellé à gauche, état à droite */
   .chips { flex: none; gap: 4px; grid-template-columns: minmax(0, 1fr); }
   .chip { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; }
@@ -288,7 +321,7 @@ dialog details summary { cursor: pointer; font-size: 12px; font-weight: 500; col
   .gauge { display: flex; flex-direction: column; min-height: 0; }
   .gauge-body { flex: 1 1 auto; height: auto; min-height: 24px; }
 
-  .col { display: flex; flex-direction: column; gap: 10px; grid-column: 2; grid-row: 3; order: 0; min-height: 0; }
+  .col { display: flex; flex-direction: column; gap: 10px; grid-column: 1; grid-row: 3; order: 0; min-height: 0; }
   .hero { flex: none; padding: 10px 14px; }
   .card { display: flex; flex-direction: column; min-height: 0; padding: 10px 12px 6px; }
   .card-head { flex: none; flex-wrap: nowrap; margin-bottom: 2px; }
@@ -301,7 +334,7 @@ dialog details summary { cursor: pointer; font-size: 12px; font-weight: 500; col
 
 /* Plus large : résumé sur une seule ligne (4 valeurs), 3 jauges par rangée */
 @media (min-width: 1100px) {
-  .container { grid-template-columns: minmax(320px, 30fr) minmax(0, 70fr); gap: 12px; }
+  .container { grid-template-columns: minmax(0, 70fr) minmax(320px, 30fr); gap: 12px; }
   .gauges { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .hero { grid-template-columns: 1.15fr 1fr 0.7fr 0.9fr; gap: 16px; }
   .hero-stats > .stat { padding-left: 14px; border-left: 1px solid var(--border); }
@@ -332,3 +365,30 @@ dialog details summary { cursor: pointer; font-size: 12px; font-weight: 500; col
 .car .tooltip { font-size: 13px; }
 .car dialog input, .car dialog select { font-size: 18px !important; padding: 12px !important; }
 .car dialog label { font-size: 15px; }
+
+/* Page Sessions, fenêtre ≥ 600 px : tient dans la fenêtre ; les listes défilent à l'intérieur */
+@media (min-width: 600px) {
+  .sessions {
+    grid-column: 1 / -1; grid-row: 3; min-height: 0;
+    grid-template-columns: minmax(250px, 34fr) minmax(0, 66fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .sess-bar { grid-column: 1 / -1; }
+  #sessRefresh { order: 1; margin-left: 8px; }
+  .sess-msg { order: 2; }
+  .sess-lists { grid-column: 1; grid-row: 2; display: flex; flex-direction: column; }
+  .sess-card { flex: 1 1 0; display: flex; flex-direction: column; min-height: 0; }
+  .sess-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; align-content: start; -webkit-overflow-scrolling: touch; }
+  .sess-charts { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; }
+  .sess-charts .card { flex: 1 1 0; }
+  #chartHeat, #chartCharge { flex: 1 1 auto; height: auto; min-height: 60px; }
+}
+@media (max-width: 599px) {
+  .header-actions { grid-auto-flow: row; grid-template-columns: auto auto auto; justify-content: start; }
+  .header-actions .view-seg { grid-column: 1 / -1; justify-self: start; }
+  .sessions { order: 1; }
+  .sess-bar { flex-wrap: wrap; }
+  .sess-msg { order: 3; flex-basis: 100%; margin: 6px 0 0; white-space: normal; }
+  .sess-list { max-height: 50vh; overflow-y: auto; }
+  #chartHeat, #chartCharge { height: 220px; }
+}

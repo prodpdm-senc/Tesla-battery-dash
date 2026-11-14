@@ -1,16 +1,17 @@
-import { TessieClient, ApiError } from './tessie.js?v=11';
-import { Simulator } from './simulator.js?v=11';
-import { estimate, pickTemp, formatDuration } from './estimator.js?v=11';
-import { settings as settingsStore, history, observations, appendSample } from './store.js?v=11';
-import { createCharts } from './charts.js?v=11';
-import { Gauges } from './gauges.js?v=11';
-import { summarize, formatReport } from './history.js?v=11';
-import { detectHeatingEnd } from './events.js?v=11';
+import { TessieClient, ApiError } from './tessie.js?v=12';
+import { Simulator } from './simulator.js?v=12';
+import { estimate, pickTemp, formatDuration } from './estimator.js?v=12';
+import { settings as settingsStore, history, observations, appendSample } from './store.js?v=12';
+import { createCharts } from './charts.js?v=12';
+import { Gauges } from './gauges.js?v=12';
+import { summarize, formatReport, statesToSamples, mergeSamples } from './history.js?v=12';
+import { SessionsView, demoHistory } from './sessionsView.js?v=12';
+import { detectHeatingEnd } from './events.js?v=12';
 
 // Version de l'app. Le même numéro est ajouté à l'adresse de chaque fichier (?v=…)
 // pour forcer les navigateurs (Chrome iPhone, auto) à charger la nouvelle version.
 // À augmenter à chaque mise en ligne ; test/version.test.mjs vérifie la cohérence.
-export const APP_VERSION = '11';
+export const APP_VERSION = '12';
 
 const DEFAULTS = {
   vin: '',
@@ -22,6 +23,7 @@ const DEFAULTS = {
   rememberToken: false,
   rangeMin: 60,
   demo: false,
+  view: 'live',        // 'live' | 'sessions'
 };
 const DEMO_INTERVAL_S = 5;
 const STALE_MS = 5 * 60000;
@@ -46,6 +48,7 @@ const state = {
 };
 
 let charts;
+let sessions;
 
 // ───────────────────────── Démarrage ─────────────────────────
 
@@ -56,10 +59,20 @@ function init() {
   importSetupFromHash();
   charts = createCharts({ tempEl: $('chartTemp'), powerEl: $('chartPower') });
   buildGauges();
+  sessions = new SessionsView({
+    fetchStates: (q) => {
+      if (!state.s.token || !state.s.vin) return Promise.reject(new Error('token ou VIN manquant (Réglages)'));
+      return new TessieClient({ token: state.s.token, baseUrl: state.s.baseUrl || DEFAULTS.baseUrl, timeoutMs: 45000 }).states(state.s.vin, q);
+    },
+    demoSamples: () => (state.sim ? (state.demoHist || (state.demoHist = demoHistory())) : null),
+    getTarget: () => +state.s.target,
+    onUseTarget: (t) => { state.s.target = t; settingsStore.save(state.s); render(); },
+  });
   bindUi();
   syncRangeButtons();
   if (state.s.demo) startDemo();
   else startLive();
+  applyView();
 }
 
 function client() {
@@ -82,6 +95,8 @@ function startLive() {
   banner(null);
   render();
   poll();
+  backfill();
+  if (state.s.view === 'sessions') sessions.show(`live:${state.s.vin}`);
 }
 
 function startDemo() {
@@ -93,6 +108,7 @@ function startDemo() {
   banner('info', 'Mode démo : préconditionnement simulé d’un pack LFP par −5 °C. Aucune donnée réelle.');
   render();
   poll();
+  if (state.s.view === 'sessions') sessions.show('demo');
 }
 
 function stop() {
@@ -108,7 +124,8 @@ function stop() {
 function importSetupFromHash() {
   const m = /[#&]setup=([^&]+)/.exec(location.hash);
   if (!m) return;
-  try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { location.hash = ''; }
+  // window.history : « history » désigne ici le stockage local (store.js).
+  try { window.history.replaceState(null, '', location.pathname + location.search); } catch (e) { location.hash = ''; }
   try {
     const data = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
     if (data.token) state.s.token = String(data.token).trim();
@@ -127,6 +144,40 @@ function buildSetupLink(token, vin, target) {
   const json = JSON.stringify({ token, vin, target });
   const b64 = btoa(unescape(encodeURIComponent(json)));
   return `${location.origin}${location.pathname}#setup=${encodeURIComponent(b64)}`;
+}
+
+// ───────────────────────── Vues et historique ─────────────────────────
+
+/** Affiche la vue Direct ou Sessions. */
+function applyView() {
+  const v = state.s.view === 'sessions' ? 'sessions' : 'live';
+  document.documentElement.classList.toggle('view-sessions', v === 'sessions');
+  $('viewSessions').hidden = v !== 'sessions';
+  for (const b of $('viewSeg').querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.view === v));
+  if (v === 'sessions') sessions.show(state.sim ? 'demo' : `live:${state.s.vin}`);
+  else render();
+}
+
+/**
+ * Remplit le graphique avec les dernières heures enregistrées par Tessie,
+ * pour ne pas partir de zéro à l'ouverture. Silencieux en cas d'échec.
+ */
+async function backfill() {
+  const gen = state.gen;
+  const now = Math.floor(Date.now() / 1000);
+  const hours = Math.min(12, Math.max(1, Math.ceil(state.s.rangeMin / 60)));
+  try {
+    const json = await new TessieClient({ token: state.s.token, baseUrl: state.s.baseUrl || DEFAULTS.baseUrl, timeoutMs: 30000 })
+      .states(state.s.vin, `from=${now - hours * 3600}&to=${now}&interval=1`);
+    if (gen !== state.gen) return; // mode changé entretemps
+    const remote = statesToSamples(json).filter((x) => x.tempMin != null || x.voltage != null);
+    if (!remote.length) return;
+    state.samples = mergeSamples(state.samples, remote);
+    history.save(state.s.vin, state.samples);
+    render();
+  } catch (e) {
+    // L'historique est un plus : le direct continue sans lui.
+  }
 }
 
 // ───────────────────────── Boucle de lecture ─────────────────────────
@@ -358,6 +409,13 @@ function bindUi() {
   $('btnSettings').addEventListener('click', () => openSettings());
   $('btnTarget').addEventListener('click', () => openSettings(null, 'target'));
   $('btnRefresh').addEventListener('click', () => poll());
+  $('viewSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    state.s.view = b.dataset.view;
+    settingsStore.save(state.s);
+    applyView();
+  });
   $('btnDemo').addEventListener('click', () => {
     state.s.demo = !state.sim;
     settingsStore.save(state.s);

@@ -7,7 +7,7 @@
 <meta name="description" content="Température de batterie, préconditionnement et recharge rapide en direct via Tessie.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=11">
+<link rel="stylesheet" href="css/style.css?v=12">
 <script>
   // Script classique (sans module) : s'exécute même sur un navigateur ancien.
   // Affiche les erreurs à l'écran, puisque le navigateur de l'auto n'a pas de console.
@@ -33,7 +33,7 @@
   })();
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
-<script type="module" src="js/app.js?v=11"></script>
+<script type="module" src="js/app.js?v=12"></script>
 </head>
 <body>
 <main class="container">
@@ -47,6 +47,10 @@
       <p class="subtitle" id="subtitle">Préconditionnement &amp; recharge rapide</p>
     </div>
     <div class="header-actions">
+      <div class="seg view-seg" id="viewSeg" role="group" aria-label="Vue">
+        <button type="button" data-view="live" aria-pressed="true">Direct</button>
+        <button type="button" data-view="sessions">Sessions</button>
+      </div>
       <button class="btn" id="btnDemo" type="button" aria-pressed="false">Démo</button>
       <button class="btn" id="btnRefresh" type="button" title="Actualiser maintenant">↻</button>
       <button class="btn btn-primary" id="btnSettings" type="button">Réglages</button>
@@ -129,6 +133,39 @@
 
   </div>
 
+  <section class="sessions" id="viewSessions" hidden aria-label="Sessions">
+    <div class="sess-bar">
+      <div class="seg" id="sessPeriod" role="group" aria-label="Période">
+        <button type="button" data-p="24h">24 h</button>
+        <button type="button" data-p="7j">7 jours</button>
+        <button type="button" data-p="30j">30 jours</button>
+      </div>
+      <span class="sess-msg" id="sessMsg" role="status"></span>
+      <button class="btn" id="sessRefresh" type="button" title="Relire l'historique Tessie">↻</button>
+    </div>
+    <div class="sess-lists">
+      <section class="card sess-card">
+        <h2>Chauffes <span class="muted" id="heatCount"></span></h2>
+        <ul class="sess-list" id="heatList"></ul>
+      </section>
+      <section class="card sess-card">
+        <h2>Recharges <span class="muted" id="chargeCount"></span></h2>
+        <ul class="sess-list" id="chargeList"></ul>
+      </section>
+    </div>
+    <div class="sess-charts">
+      <section class="card">
+        <div class="card-head"><div class="card-title"><h2>Courbes de chauffe</h2>
+          <div class="legend"><span class="legend-item">module le plus froid, depuis le début de la chauffe</span></div></div></div>
+        <div class="chart" id="chartHeat" data-label="Température pendant chaque chauffe"></div>
+      </section>
+      <section class="card">
+        <div class="card-head"><div class="card-title"><h2>Courbes de recharge</h2>
+          <div class="legend ramp-legend" id="chargeLegend"></div></div></div>
+        <div class="chart" id="chartCharge" data-label="Puissance de recharge selon le pourcentage de charge"></div>
+      </section>
+    </div>
+  </section>
 </main>
 
 <dialog id="settings">

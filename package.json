@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Dashboard batterie Tesla (préconditionnement, recharge rapide) via Tessie",
   "scripts": {
-    "test": "node --test test/estimator.test.mjs test/history.test.mjs test/events.test.mjs test/version.test.mjs",
+    "test": "node --test test/estimator.test.mjs test/history.test.mjs test/events.test.mjs test/version.test.mjs test/sessions.test.mjs",
     "serve": "python3 -m http.server 8000"
   }
 }

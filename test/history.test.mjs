@@ -89,3 +89,35 @@ test('columnarToRecords ignore les listes de points et les objets simples', () =
   assert.equal(columnarToRecords({ a: [{ x: 1 }], b: [{ x: 2 }] }), null);
   assert.equal(columnarToRecords({ a: 1 }), null);
 });
+
+import { statesToSamples, mergeSamples } from '../js/history.js';
+
+test('statesToSamples : colonnes → échantillons, convention de signe et valeurs absurdes', () => {
+  const json = { results: {
+    timestamps: [100, 130, 160],
+    pack_voltages: [4.68, 350, 352],          // 4,68 V = lecture d'auto endormie
+    pack_currents: [0, -37, 120],             // Tessie : négatif = décharge
+    module_temp_mins: [16, 16.5, 200],        // 200 °C = absurde
+    module_temp_maxs: [17, 17.5, 18],
+    battery_heater_ons: [0, 1, 0],
+    charging_states: ['Disconnected', 'Disconnected', 'Charging'],
+    battery_levels: [63, 63, 64],
+  } };
+  const s = statesToSamples(json);
+  assert.equal(s.length, 3);
+  assert.equal(s[0].voltage, null);
+  assert.equal(s[0].powerKw, null);
+  assert.equal(s[1].current, 37);                       // décharge → positif
+  assert.ok(Math.abs(s[1].powerKw - 12.95) < 0.01);
+  assert.ok(s[2].powerKw < 0);                          // recharge → négatif
+  assert.equal(s[2].tempMin, null);
+  assert.equal(s[1].heaterOn, true);
+  assert.equal(s[0].t, 100000);
+});
+
+test('mergeSamples : priorité au direct, sans doublons, trié', () => {
+  const remote = [{ t: 0, v: 'r' }, { t: 30000, v: 'r' }, { t: 60000, v: 'r' }];
+  const local = [{ t: 31000, v: 'l' }, { t: 90000, v: 'l' }];
+  const m = mergeSamples(local, remote);
+  assert.deepEqual(m.map((x) => [x.t, x.v]), [[0, 'r'], [31000, 'l'], [60000, 'r'], [90000, 'l']]);
+});
