@@ -53,6 +53,7 @@ Tessie n'enregistre pas l'état « préconditionnement » : les chauffes sont d�
 Le navigateur de l'auto est un Chromium parfois ancien (version 79 sur certains véhicules), sans console de débogage. Le dashboard en tient compte :
 
 - **Code compatible ES2019** : aucune syntaxe récente (`?.`, `??`, méthodes `#privées`). GitHub Actions le vérifie à chaque push.
+- **Conduite à gauche** : tout ce qui se touche (boutons, sélecteur de période, graphiques, listes de sessions) est à gauche, du côté du conducteur ; les jauges en lecture seule sont à droite.
 - **Tout à l'écran, sans défiler** : dès 600 px de large (navigateur de l'auto en plein écran ou non), la page remplit exactement la fenêtre. Jauges à gauche, résumé et graphiques à droite ; graphiques et barres prennent l'espace restant. Sous 600 px (téléphone), la page défile.
 - **Mode auto** : détecté automatiquement (« Tesla » dans le navigateur) ou forcé avec `?auto` dans l'URL. Boutons et zones tactiles plus grands.
 - **Écran tactile** : toucher un graphique affiche les valeurs ; toucher ailleurs les masque.

@@ -294,15 +294,24 @@ dialog details summary { cursor: pointer; font-size: 12px; font-weight: 500; col
   body { padding: 10px 12px; }
   .container {
     max-width: none; height: calc(100vh - 20px); min-height: 440px;
-    grid-template-columns: minmax(200px, 32fr) minmax(0, 68fr);
+    /* Conduite à gauche : tout ce qui se touche (boutons, graphiques) du côté du conducteur,
+       les jauges (lecture seule) à droite. */
+    grid-template-columns: minmax(0, 68fr) minmax(200px, 32fr);
     grid-template-rows: auto auto minmax(0, 1fr);
     gap: 10px;
   }
   .header, .notices { grid-column: 1 / -1; }
   .header > * { margin-top: 0; }
+  /* Boutons à gauche (côté conducteur), titre à droite */
+  .header { flex-direction: row-reverse; }
+  .header > div:first-child { text-align: right; }
+  .header .status { justify-content: flex-end; }
+  /* Sélecteur de période au début de l'en-tête du graphique (à gauche) */
+  .card-head { justify-content: flex-start; }
+  #rangeSeg { order: -1; margin-right: 14px; flex: none; }
   .subtitle { display: none; }
 
-  .rail { grid-column: 1; grid-row: 3; order: 0; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+  .rail { grid-column: 2; grid-row: 3; order: 0; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
   /* Colonne étroite : une pastille par ligne, libellé à gauche, état à droite */
   .chips { flex: none; gap: 4px; grid-template-columns: minmax(0, 1fr); }
   .chip { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; }
@@ -312,7 +321,7 @@ dialog details summary { cursor: pointer; font-size: 12px; font-weight: 500; col
   .gauge { display: flex; flex-direction: column; min-height: 0; }
   .gauge-body { flex: 1 1 auto; height: auto; min-height: 24px; }
 
-  .col { display: flex; flex-direction: column; gap: 10px; grid-column: 2; grid-row: 3; order: 0; min-height: 0; }
+  .col { display: flex; flex-direction: column; gap: 10px; grid-column: 1; grid-row: 3; order: 0; min-height: 0; }
   .hero { flex: none; padding: 10px 14px; }
   .card { display: flex; flex-direction: column; min-height: 0; padding: 10px 12px 6px; }
   .card-head { flex: none; flex-wrap: nowrap; margin-bottom: 2px; }
@@ -325,7 +334,7 @@ dialog details summary { cursor: pointer; font-size: 12px; font-weight: 500; col
 
 /* Plus large : résumé sur une seule ligne (4 valeurs), 3 jauges par rangée */
 @media (min-width: 1100px) {
-  .container { grid-template-columns: minmax(320px, 30fr) minmax(0, 70fr); gap: 12px; }
+  .container { grid-template-columns: minmax(0, 70fr) minmax(320px, 30fr); gap: 12px; }
   .gauges { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .hero { grid-template-columns: 1.15fr 1fr 0.7fr 0.9fr; gap: 16px; }
   .hero-stats > .stat { padding-left: 14px; border-left: 1px solid var(--border); }
@@ -365,6 +374,8 @@ dialog details summary { cursor: pointer; font-size: 12px; font-weight: 500; col
     grid-template-rows: auto minmax(0, 1fr);
   }
   .sess-bar { grid-column: 1 / -1; }
+  #sessRefresh { order: 1; margin-left: 8px; }
+  .sess-msg { order: 2; }
   .sess-lists { grid-column: 1; grid-row: 2; display: flex; flex-direction: column; }
   .sess-card { flex: 1 1 0; display: flex; flex-direction: column; min-height: 0; }
   .sess-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; align-content: start; -webkit-overflow-scrolling: touch; }
