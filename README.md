@@ -41,7 +41,8 @@ Il faut confirmer que `api.tessie.com` accepte les appels directs depuis un navi
 Le navigateur de l'auto est un Chromium parfois ancien (version 79 sur certains véhicules), sans console de débogage. Le dashboard en tient compte :
 
 - **Code compatible ES2019** : aucune syntaxe récente (`?.`, `??`, méthodes `#privées`). GitHub Actions le vérifie à chaque push.
-- **Mode auto** : détecté automatiquement (« Tesla » dans le navigateur) ou forcé avec `?auto` dans l'URL. Le texte et les boutons sont plus grands, et la page s'affiche en 2 colonnes sans défiler sur l'écran paysage.
+- **Tout à l'écran, sans défiler** : dès 600 px de large (navigateur de l'auto en plein écran ou non), la page remplit exactement la fenêtre. Jauges à gauche, résumé et graphiques à droite ; graphiques et barres prennent l'espace restant. Sous 600 px (téléphone), la page défile.
+- **Mode auto** : détecté automatiquement (« Tesla » dans le navigateur) ou forcé avec `?auto` dans l'URL. Boutons et zones tactiles plus grands.
 - **Écran tactile** : toucher un graphique affiche les valeurs ; toucher ailleurs les masque.
 - **Erreurs à l'écran** : si la page ne démarre pas, un encadré rouge affiche l'erreur et la version du navigateur. Prends-le en photo pour le diagnostic.
 - **Token mémorisé** : dans l'auto, « Se souvenir » est coché par défaut pour ne pas retaper le token.
@@ -70,7 +71,7 @@ Sinon, tape le token une seule fois dans l'auto avec « Se souvenir » coché.
 
 Pour trouver la vraie valeur sur ton auto :
 1. Laisse le dashboard ouvert pendant quelques préconditionnements.
-2. Regarde la section *Coupures du chauffage observées*.
+2. Regarde la section *Coupures du chauffage observées*, dans **Réglages**.
 3. Clique **Utiliser comme cible** sur une valeur cohérente.
 
 ## Notes et limites
