@@ -100,7 +100,7 @@ export function estimate(samples, opts = {}, prevSmoothed = null) {
   // Valeur ajustée au dernier instant (x = 0) ; bornée à ± 1 °C du brut.
   const tempFit = Math.min(last.y + 1, Math.max(last.y - 1, fit.intercept));
 
-  const out = { ...base, rate, rateSmoothed, tempFit, r2: fit.r2 };
+  const out = { ...base, rate, rateSmoothed, tempFit, r2: fit.r2, spanMs: span };
 
   if (rateSmoothed <= o.flatRate) {
     out.status = rateSmoothed < -o.flatRate ? 'cooling' : 'stable';
@@ -114,7 +114,22 @@ export function estimate(samples, opts = {}, prevSmoothed = null) {
   const loRate = rateSmoothed - fit.se;
   out.etaLowMs = Number.isFinite(hiRate) && hiRate > 0 ? (delta / hiRate) * MIN : null;
   out.etaHighMs = Number.isFinite(loRate) && loRate > o.flatRate ? (delta / loRate) * MIN : Infinity;
+  out.confidence = confidence(out, span, o);
   return out;
+}
+
+/**
+ * Confiance de l'ETA : « low » quand la plage est trop large pour qu'une heure précise
+ * ait un sens (borne haute infinie, plage > 60 % de l'ETA), quand il y a moins de
+ * 3 minutes de données ou que la droite colle mal aux points (R² < 0,5).
+ */
+export function confidence(est, spanMs, o = DEFAULTS) {
+  if (est.status !== 'heating') return null;
+  if (!(spanMs >= (o.confidentSpanMin || 3) * MIN)) return 'low';
+  if (est.r2 != null && est.r2 < 0.5) return 'low';
+  if (est.etaHighMs === Infinity || est.etaLowMs == null) return 'low';
+  if (est.etaHighMs - est.etaLowMs > 0.6 * est.etaMs) return 'low';
+  return 'ok';
 }
 
 /** Formate une durée en ms : « 12 min », « 1 h 05 », « 45 s ». */

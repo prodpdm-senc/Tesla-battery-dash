@@ -2,7 +2,7 @@
 // Module pur (aucun DOM), testé. Entrée : échantillons triés (history.statesToSamples).
 // Convention : powerKw positif = énergie qui sort de la batterie.
 
-import { linearFit } from './estimator.js?v=18';
+import { linearFit } from './estimator.js?v=19';
 
 const MIN = 60000;
 
@@ -40,6 +40,42 @@ function integrateKwh(pts, f, maxGapMs) {
   return kwh;
 }
 
+/**
+ * Résumé d'une recharge rapide : minutes passées à 100 kW ou plus, et kWh ajoutés après
+ * 10, 20 et 30 minutes (comptées à partir du premier point à 5 kW ou plus, pour ignorer
+ * la poignée de main avec la borne). null quand la session est plus courte que la durée.
+ */
+export function fastChargeStats(pts, { maxGapMs = 10 * MIN } = {}) {
+  let above = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const dt = pts[i].t - pts[i - 1].t;
+    if (dt <= 0 || dt > maxGapMs) continue;
+    if ((chargePowerKw(pts[i]) + chargePowerKw(pts[i - 1])) / 2 >= 100) above += dt;
+  }
+  const kwhAfter = { 10: null, 20: null, 30: null };
+  const k0 = pts.findIndex((p) => chargePowerKw(p) >= 5);
+  if (k0 >= 0) {
+    const ts = pts[k0].t, tEnd = pts[pts.length - 1].t;
+    for (const m of [10, 20, 30]) {
+      if (tEnd - ts < m * MIN) continue;
+      const lim = ts + m * MIN;
+      // Intégrale jusqu'à exactement `lim` (interpolation dans le dernier intervalle).
+      let kwh = 0;
+      for (let i = k0 + 1; i < pts.length && pts[i - 1].t < lim; i++) {
+        const a = pts[i - 1], b = pts[i];
+        const dt = b.t - a.t;
+        if (dt <= 0 || dt > maxGapMs) continue;
+        const pa = chargePowerKw(a), pb = chargePowerKw(b);
+        const tb = Math.min(b.t, lim);
+        const pEnd = pa + (pb - pa) * ((tb - a.t) / dt);
+        kwh += ((pa + pEnd) / 2) * ((tb - a.t) / 3600000);
+      }
+      kwhAfter[m] = kwh;
+    }
+  }
+  return { minAbove100: above / MIN, kwhAfter };
+}
+
 /** Regroupe les indices qui satisfont `pred` en suites, coupées par un trou > gapMs. */
 function runs(samples, pred, gapMs) {
   const out = [];
@@ -73,8 +109,11 @@ export function detectChargingSessions(samples, { gapMs = 15 * MIN, minDurMs = 3
     const tmin = pts.map((p) => p.tempMin).filter(finite);
     const tmax = pts.map((p) => p.tempMax).filter(finite);
     const ext = pts.map((p) => p.outsideTemp).filter(finite);
+    const fast = fastChargeStats(pts);
     out.push({
       t0, t1, durationMs: t1 - t0,
+      minAbove100: fast.minAbove100,
+      kwhAfter: fast.kwhAfter,
       socStart: socs.length ? socs[0] : null,
       socEnd: socs.length ? socs[socs.length - 1] : null,
       energyKwh,

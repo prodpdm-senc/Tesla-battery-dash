@@ -1,6 +1,9 @@
 // Jauges en barres verticales (HTML/CSS pur) avec la valeur en texte dessous.
 // Grandeurs signées (courant, puissance, température) : la barre part de la ligne
 // du zéro, vers le haut si positif, vers le bas si négatif.
+// Une valeur trop vieille est atténuée et son âge remplace le texte du dessous.
+
+import { formatAge } from './quality.js?v=19';
 
 function clamp01(t) { return Math.max(0, Math.min(1, t)); }
 
@@ -56,7 +59,13 @@ export class Gauges {
     return { d, box, fill, marker, value, sub, zeroT };
   }
 
-  update(sample) {
+  /**
+   * @param {object|null} sample
+   * @param {{ ages?: Object<string, number|null>, staleMs?: number }} [opt] âge (ms) de la valeur de chaque jauge
+   */
+  update(sample, opt) {
+    const ages = (opt && opt.ages) || {};
+    const staleMs = (opt && opt.staleMs) || 3 * 60000;
     for (const it of this.items) {
       const d = it.d;
       const v = sample ? d.get(sample) : null;
@@ -72,7 +81,10 @@ export class Gauges {
 
       const sign = d.signed && ok && v > 0 ? '+' : '';
       it.value.innerHTML = `${sign}${fmtNum(v, d.decimals == null ? 0 : d.decimals)}<span class="unit">${d.unit}</span>`;
-      it.sub.textContent = sample && d.sub ? d.sub(sample) : '';
+      const age = ages[d.id];
+      const stale = ok && age != null && age > staleMs;
+      it.box.toggleAttribute('data-stale', stale);
+      it.sub.textContent = stale ? formatAge(age) : sample && d.sub ? d.sub(sample) : '';
 
       const m = sample && d.marker ? d.marker(sample) : null;
       it.marker.hidden = !(m != null && Number.isFinite(m));

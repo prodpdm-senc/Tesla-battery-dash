@@ -7,7 +7,7 @@
 <meta name="description" content="Température de batterie, préconditionnement et recharge rapide en direct via Tessie.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=18">
+<link rel="stylesheet" href="css/style.css?v=19">
 <script>
   // Script classique (sans module) : s'exécute même sur un navigateur ancien.
   // Affiche les erreurs à l'écran, puisque le navigateur de l'auto n'a pas de console.
@@ -33,7 +33,7 @@
   })();
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
-<script type="module" src="js/app.js?v=18"></script>
+<script type="module" src="js/app.js?v=19"></script>
 </head>
 <body>
 <main class="container">
@@ -105,6 +105,7 @@
           <span class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>Module min</span>
           <span class="legend-item"><span class="swatch" style="background:var(--series-2)"></span>Module max</span>
           <span class="legend-item"><span class="swatch swatch-dash"></span>Cible</span>
+          <span class="legend-item" id="legendPrecond" hidden><span class="swatch swatch-zone"></span>Précond.</span>
         </div>
       </div>
       <div class="seg" role="group" aria-label="Fenêtre de temps" id="rangeSeg">
@@ -129,7 +130,7 @@
       </div>
     </div>
     <div class="chart" id="chartMotor" data-label="Températures du moteur arrière dans le temps">
-      <p class="chart-empty" id="motorEmpty" hidden>Aucune température du moteur reçue. Active le <b>Profiler</b> dans Tessie (web) ; les valeurs arrivent par le flux en direct.</p>
+      <p class="chart-empty" id="motorEmpty" hidden>En attente d’une valeur du moteur : le flux n’envoie une température que lorsqu’elle change (<b>Profiler</b> de Tessie requis).</p>
     </div>
   </section>
 
@@ -163,7 +164,12 @@
         <div class="chart" id="chartHeat" data-label="Température pendant chaque chauffe"></div>
       </section>
       <section class="card">
-        <div class="card-head"><div class="card-title"><h2>Courbes de recharge rapide</h2>
+        <div class="card-head">
+          <div class="seg" id="chargeMode" role="group" aria-label="Affichage des recharges">
+            <button type="button" data-mode="curves" aria-pressed="true">Courbes</button>
+            <button type="button" data-mode="scatter">Temp. → pic</button>
+          </div>
+          <div class="card-title"><h2 id="chargeChartTitle">Courbes de recharge rapide</h2>
           <div class="legend ramp-legend" id="chargeLegend"></div></div></div>
         <div class="chart" id="chartCharge" data-label="Puissance de recharge selon le pourcentage de charge"></div>
       </section>
@@ -205,7 +211,16 @@
       <label>Fenêtre de régression (min)
         <input type="number" name="windowMin" min="2" max="30" step="1">
       </label>
+      <label>Thème
+        <select name="theme">
+          <option value="system">Comme l’appareil</option>
+          <option value="sun">Selon le soleil (nuit = sombre)</option>
+          <option value="dark">Sombre</option>
+          <option value="light">Clair</option>
+        </select>
+      </label>
     </div>
+    <p class="muted small">L’intervalle sert au sondage de Tessie (préconditionnement, état de recharge…). Quand le flux en direct est coupé, le sondage passe à 15 s au plus.</p>
 
     <details>
       <summary>Avancé</summary>

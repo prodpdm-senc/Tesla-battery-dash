@@ -1,7 +1,7 @@
 // Client Tessie minimal + normalisation des données en un « échantillon » plat.
 // Docs : https://developer.tessie.com
 
-import { pickStatorTemp } from './telemetry.js?v=18';
+import { pickStatorTemp } from './telemetry.js?v=19';
 
 export class ApiError extends Error {
   constructor(message, { status = 0, kind = 'http' } = {}) {
@@ -130,5 +130,8 @@ export function normalize(battery, state) {
     heatsinkTemp: pickStatorTemp(st, 'heatsink'),
     shiftState: ds.shift_state || null,
     speed: num(ds.speed),
+    // Position : sert seulement au thème « selon le soleil » ; retirée avant tout enregistrement.
+    latitude: num(ds.latitude),
+    longitude: num(ds.longitude),
   };
 }
