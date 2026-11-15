@@ -3,6 +3,8 @@
 
 /* global d3 */
 
+import { gapThreshold, splitAtGaps, gapZones } from './quality.js?v=19';
+
 // Marges identiques pour les deux graphiques : les axes de temps s'alignent.
 const M = { top: 24, right: 62, bottom: 22, left: 40 };
 const fmtTime = (d) => d3.timeFormat('%H:%M')(d);
@@ -99,6 +101,23 @@ class TimeChart {
     this.gGrid.select('.domain').remove();
 
     this.gExtra.selectAll('*').remove();
+    // Trous de données : la courbe est coupée et la zone grisée (pas de fausse pente).
+    const maxGap = this.extras.maxGapMs || gapThreshold(data);
+    const xl = M.left, xr = M.left + iw;
+    const zone = (z, cls) => {
+      const a = Math.max(xl, x(z.t0)), b = Math.min(xr, x(z.t1));
+      if (b - a < 1) return;
+      this.gExtra.append('rect').attr('class', cls).attr('x', a).attr('y', M.top).attr('width', b - a).attr('height', ih);
+    };
+    for (const z of this.extras.zones || []) zone(z, `zone ${z.cls || ''}`);
+    for (const z of gapZones(data, maxGap)) zone(z, 'zone gap-zone');
+    // Repères verticaux (ex. fin de chauffe détectée).
+    for (const mk of this.extras.markers || []) {
+      const mx = x(mk.t);
+      if (mx < xl || mx > xr) continue;
+      this.gExtra.append('line').attr('class', 'marker-line').attr('x1', mx).attr('x2', mx).attr('y1', M.top).attr('y2', M.top + ih);
+      if (mk.label) this.gExtra.append('text').attr('class', 'marker-label').attr('x', mx + 4).attr('y', M.top + ih - 4).text(mk.label);
+    }
     // Ligne du zéro (puissance : séparation décharge / recharge).
     if (this.zero && y.domain()[0] < 0 && y.domain()[1] > 0) {
       this.gExtra.append('line').attr('class', 'zero-line')
@@ -117,7 +136,8 @@ class TimeChart {
       const [a, b] = this.extras.band;
       const area = d3.area().defined((d) => d[a] != null && d[b] != null)
         .x((d) => x(d.t)).y0((d) => y(d[a])).y1((d) => y(d[b]));
-      this.gExtra.append('path').datum(data).attr('class', 'band').attr('d', area);
+      const dBand = splitAtGaps(data, maxGap).map((seg) => area(seg) || '').join('');
+      this.gExtra.append('path').attr('class', 'band').attr('d', dBand);
     }
     // Ligne de cible horizontale.
     if (this.extras.target != null) {
@@ -146,8 +166,14 @@ class TimeChart {
     // Séries.
     const lines = this.gLines.selectAll('path.series').data(this.series, (s) => s.key);
     lines.join('path').attr('class', 'series').attr('stroke', (s) => css(s.color))
-      .attr('d', (s) => d3.line().defined((d) => d[s.key] != null)
-        .x((d) => x(d.t)).y((d) => y(d[s.key])).curve(d3.curveMonotoneX)(s.connect ? data.filter((d) => d[s.key] != null) : data));
+      .attr('d', (s) => {
+        const line = d3.line().defined((d) => d[s.key] != null).x((d) => x(d.t)).y((d) => y(d[s.key])).curve(d3.curveMonotoneX);
+        // Séries « reliées » (valeurs espacées, ex. moteur) : on relie les points connus,
+        // mais pas au-delà de 10 minutes sans valeur.
+        const pts = s.connect ? data.filter((d) => d[s.key] != null) : data;
+        const gap = s.connect ? Math.max(10 * 60000, maxGap) : maxGap;
+        return splitAtGaps(pts, gap).map((seg) => line(seg) || '').join('');
+      });
 
     // Point à la fin de chaque série + valeur actuelle à droite.
     const last = data[data.length - 1];
@@ -196,8 +222,8 @@ class TimeChart {
       const txt = v == null ? '—' : (s.fmt ? s.fmt(v) : v.toFixed(1));
       return `<div class="tip-row"><span class="swatch" style="background:${css(s.color)}"></span>`
         + `<span class="tip-label">${s.label}</span><span class="tip-val">${txt} ${s.unit}</span></div>`;
-    }).join('') + this.extraTip.filter((e) => d[e.key] != null).map((e) =>
-      `<div class="tip-row"><span class="swatch"></span><span class="tip-label">${e.label}</span><span class="tip-val">${d[e.key].toFixed(1)} °C</span></div>`).join('');
+    }).join('') + this.extraTip.map((e) => ({ e, v: e.get ? e.get(d) : d[e.key] })).filter((r) => r.v != null && r.v !== false).map((r) =>
+      `<div class="tip-row"><span class="swatch"></span><span class="tip-label">${r.e.label}</span><span class="tip-val">${r.e.fmt ? r.e.fmt(r.v) : `${r.v.toFixed(1)} °C`}</span></div>`).join('');
     this.tip.html(`<div class="tip-time">${d3.timeFormat('%H:%M:%S')(d.t)}</div>${rows}`)
       .attr('hidden', null);
     const box = this.el.getBoundingClientRect();
@@ -211,13 +237,21 @@ export function createCharts({ tempEl, motorEl }) {
   // Si le CDN de D3 est inaccessible, le reste du dashboard fonctionne quand même.
   if (typeof d3 === 'undefined') {
     for (const el of [tempEl, motorEl]) {
-      el.innerHTML = '<p class="muted small">Graphique indisponible (la librairie D3 n’a pas pu être chargée).</p>';
+      // Ajouté (pas innerHTML) : les éléments déjà dans le conteneur (ex. #motorEmpty) restent.
+      const msg = document.createElement('p');
+      msg.className = 'muted small';
+      msg.textContent = 'Graphique indisponible (la librairie D3 n’a pas pu être chargée).';
+      el.appendChild(msg);
     }
     const noop = { update() {} };
     return { temp: noop, motor: noop };
   }
   const temp = new TimeChart(tempEl, {
     unit: '°C', height: 260, yMinSpan: 10, showX: false,
+    extraTip: [
+      { label: 'Écart', get: (d) => (d.tempMin != null && d.tempMax != null ? d.tempMax - d.tempMin : null) },
+      { label: 'Précond.', get: (d) => (d.preconditioning ? 'actif' : null), fmt: (v) => v },
+    ],
     series: [
       { key: 'tempMax', label: 'Module max', short: 'max', color: '--series-2', unit: '°C' },
       { key: 'tempMin', label: 'Module min', short: 'min', color: '--series-1', unit: '°C' },

@@ -109,6 +109,8 @@ h2 { font-weight: 600; font-size: 14px; }
 .status[data-state="demo"] .status-dot { background: var(--accent); animation: pulse 2s ease-in-out infinite; }
 .status[data-state="error"] { color: var(--critical); }
 .status[data-state="error"] .status-dot { background: var(--critical); }
+.status[data-state="live"][data-source="poll"] { color: var(--text-secondary); }
+.status[data-state="live"][data-source="poll"] .status-dot { background: var(--warning); animation: none; }
 .status[data-state="stale"] { color: var(--text-secondary); }
 .status[data-state="stale"] .status-dot { background: var(--warning); }
 @keyframes pulse { 50% { opacity: 0.35; } }
@@ -149,6 +151,9 @@ h2 { font-weight: 600; font-size: 14px; }
 .hero-value { font-size: 28px; font-weight: 500; line-height: 1.15; margin-top: 2px; white-space: nowrap; }
 .hero-sub, .stat-sub { font-size: 11px; color: var(--text-secondary); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stat-value { font-size: 24px; font-weight: 300; line-height: 1.15; margin-top: 2px; white-space: nowrap; }
+/* ETA incertaine : chiffre atténué, précédé de « ≈ » */
+.hero-value[data-conf="low"] { color: var(--text-secondary); }
+.stat-sub[data-level="warn"] { color: var(--warning); font-weight: 600; }
 .target-btn { font: inherit; color: inherit; background: none; border: none; border-bottom: 1px dashed var(--text-muted); cursor: pointer; }
 
 /* ── Cartes et graphiques ── */
@@ -194,6 +199,16 @@ h2 { font-weight: 600; font-size: 14px; }
 .end-dot { stroke: var(--surface-1); stroke-width: 2; }
 .value-label { fill: var(--text-primary); font-size: 11px; font-weight: 600; }
 .crosshair { stroke: var(--text-muted); stroke-width: 1; }
+/* Zones : préconditionnement actif (teinte d’accent), trous de données (gris) */
+.zone { pointer-events: none; }
+.precond-zone { fill: var(--accent); opacity: 0.08; }
+.gap-zone { fill: var(--text-muted); opacity: 0.1; }
+.marker-line { stroke: var(--text-secondary); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.8; }
+.marker-label { fill: var(--text-secondary); font-family: var(--font); font-size: 10px; font-weight: 500; }
+.swatch-zone { width: 12px; height: 10px; border-radius: 2px; background: var(--accent); opacity: 0.25; }
+.trend-line { stroke: var(--text-secondary); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.scatter-dot { stroke: var(--surface-1); stroke-width: 2; opacity: 0.9; }
+.scatter-dot[data-selected="true"] { stroke: var(--text-primary); opacity: 1; }
 .hover circle { stroke: var(--surface-1); stroke-width: 2; }
 .overlay { fill: transparent; cursor: crosshair; touch-action: pan-y; }
 .tooltip {
@@ -226,6 +241,9 @@ h2 { font-weight: 600; font-size: 14px; }
 .gauge-zero { position: absolute; left: -4px; right: -4px; height: 2px; margin-bottom: -1px; background: var(--text-muted); z-index: 1; }
 .gauge-marker { position: absolute; left: -6px; right: -6px; height: 3px; margin-bottom: -1px; border-radius: 2px; background: var(--text-primary); z-index: 2; }
 .gauge[data-out] .gauge-track { box-shadow: 0 0 0 1px var(--warning); }
+/* Valeur vieille (plus de 3 min) : atténuée, l'âge s'affiche dessous */
+.gauge[data-stale] .gauge-value, .gauge[data-stale] .gauge-fill { opacity: 0.45; }
+.gauge[data-stale] .gauge-sub { color: var(--warning); }
 .gauge-value { font-size: 18px; font-weight: 400; white-space: nowrap; }
 .gauge-value .unit { font-size: 11px; }
 .gauge-sub { font-size: 10px; color: var(--text-secondary); margin-top: 1px; min-height: 1.3em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -245,6 +263,8 @@ h2 { font-weight: 600; font-size: 14px; }
 .sess-top { display: flex; justify-content: space-between; align-items: baseline; font-size: 11px; color: var(--text-secondary); }
 .sess-big { font-size: 15px; font-weight: 500; color: var(--text-primary); white-space: nowrap; margin-left: 8px; }
 .sess-sub { font-size: 11px; color: var(--text-secondary); margin-top: 3px; }
+.sess-fast { color: var(--text-primary); }
+#chargeMode { flex: none; margin-right: 14px; }
 .sess-btn { margin-top: 6px; font-size: 11px; padding: 5px 10px; }
 .sess-empty { font-size: 12px; color: var(--text-muted); padding: 6px 2px; }
 .ramp-legend { align-items: center; }

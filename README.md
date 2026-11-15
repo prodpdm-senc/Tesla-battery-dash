@@ -45,6 +45,24 @@ En mode Direct, le dashboard reste connecté au flux en direct de Tessie (`wss:/
 - Les appels à `/battery` et `/state` (toutes les 30 s par défaut) continuent en renfort et fournissent ce que le flux n'a pas (préconditionnement, état de recharge, rapport…).
 - **Erreurs** du flux (ex. `unsupported_field`) : affichées si elles concernent un champ utilisé ; toutes visibles dans *Tester le flux*, avec les changements de connectivité.
 
+## Fiabilité et qualité des données
+
+- **Source affichée** dans l'en-tête : « En direct · flux » (point vert) ou « En direct · sondage 15 s » (point ambre) quand le flux est coupé. Le détail (dernier message, reconnexions, valeurs écartées) est au bas des Réglages.
+- **Flux muet** : si l'auto roule, chauffe ou recharge et que rien n'arrive pendant 3 min, la connexion est refaite automatiquement.
+- **Sondage adaptatif** : flux coupé → `/state` toutes les 15 s au plus ; flux rétabli → retour à l'intervalle des Réglages (30 s par défaut).
+- **Valeurs aberrantes écartées** avant le calcul : hors plage (tension < 200 V pendant la veille, SOC > 100 %…), saut de température de module de plus de 3 °C ou de 2 °C/min, min au-dessus du max. Un champ écarté 3 fois de suite est ensuite accepté (c'était alors la valeur précédente qui était fausse).
+- **Trous de données** : les courbes sont coupées et la zone est grisée (plus de 5 min, ou 4 fois l'espacement habituel) au lieu d'être reliées par une fausse pente.
+- **Âge des valeurs** : une jauge dont la valeur a plus de 3 min est atténuée et affiche « il y a 4 min ».
+- **ETA incertaine** (moins de 3 min de données, R² < 0,5, plage infinie ou plus large que 60 % de l'ETA) : affichée « ≈ 25 min » sans heure précise.
+- **Écran allumé** (Wake Lock) pendant une chauffe, un préconditionnement ou une recharge, si le navigateur le permet.
+
+## Affichage
+
+- **Bande de préconditionnement** (teinte bleue) sur les deux graphiques, et repère « fin de chauffe » quand une fin de chauffe est détectée. L'historique de Tessie n'enregistre pas le préconditionnement : la bande ne couvre que ce qui a été vu en direct.
+- **Puissance de chauffe estimée** sous la jauge Puissance pendant un préconditionnement à l'arrêt : puissance qui sort de la batterie moins la consommation de base de l'auto stationnée (médiane des 30 min précédentes, sinon 0,4 kW). Elle inclut la climatisation de l'habitacle.
+- **Écart des modules** (max − min) sous la température, en ambre à partir de 6 °C ; aussi dans l'infobulle du graphique.
+- **Thème** (Réglages) : comme l'appareil, sombre, clair, ou **selon le soleil** (lever et coucher calculés avec la position de l'auto, sinon nuit de 19 h à 7 h). La position ne sert qu'à ce calcul et n'est jamais enregistrée.
+
 ## Températures du moteur (Fleet Telemetry)
 
 Stator, onduleur et dissipateur de l'unité arrière (`DiStatorTempR`, `DiInverterTR`, `DiHeatsinkTR`, en °C).
@@ -62,8 +80,9 @@ Dans *Réglages → Avancé → Moteur arrière* :
 Bouton **Direct / Sessions** en haut. La page Sessions lit l'historique de Tessie (24 h, 7 jours ou 30 jours) et détecte :
 
 - **Chauffes de batterie** (préconditionnement, à l'arrêt ou en roulant) : montée de la température du module le plus froid d'au moins 0,25 °C/min (régression sur une fenêtre glissante), hors recharge. Pour chacune : températures de départ et d'arrivée, durée, °C/min, température extérieure, énergie consommée (à l'arrêt seulement : en roulant, la propulsion s'y mêle), et la recharge qui a suivi. Bouton **Utiliser comme cible**.
-- **Recharges rapides (DC)** : % de départ et d'arrivée, énergie ajoutée, puissance de pointe et moyenne, durée, température de la batterie au branchement. Les recharges AC (maison, pointe < 25 kW) ne sont pas affichées : la température de la batterie n'y limite pas la puissance. Leur nombre est indiqué dans le résumé de la période.
+- **Recharges rapides (DC)** : % de départ et d'arrivée, énergie ajoutée, puissance de pointe et moyenne, durée, température de la batterie au branchement, **minutes à 100 kW ou plus** et **kWh ajoutés après 10 / 20 / 30 min** (comptés à partir du premier point à 5 kW). Les recharges AC (maison, pointe < 25 kW) ne sont pas affichées : la température de la batterie n'y limite pas la puissance. Leur nombre est indiqué dans le résumé de la période.
 - **Graphiques** : courbes de chauffe superposées (depuis le début de chaque chauffe) et puissance de recharge selon le % de charge, colorée du bleu (batterie froide) à l'ambre (batterie chaude).
+- **Temp. → pic** : un point par recharge DC (température au branchement, puissance de pointe) et la tendance en kW par °C, dès 3 recharges couvrant au moins 3 °C d'écart.
 
 Tessie n'enregistre pas l'état « préconditionnement » : les chauffes sont déduites de la température. Sur 7 et 30 jours, les points sont demandés aux 60 s et aux 5 min pour garder la réponse légère.
 
@@ -126,7 +145,6 @@ Chaque fichier est chargé avec un numéro de version dans son adresse (`?v=11`)
 
 - Proxy Cloudflare Worker : token secret et historique enregistré même page fermée.
 - Modèle thermique du 1er ordre (exponentiel) au lieu d'une droite, plus juste près de la cible.
-- Courbe de puissance de recharge en fonction du SOC et de la température.
 
 ## Structure
 
@@ -143,6 +161,7 @@ js/events.js        détection des fins de chauffe (pur, testé)
 js/sessions.js      détection des chauffes et des recharges dans l'historique (pur, testé)
 js/sessionsView.js  page Sessions (listes et graphiques)
 js/telemetry.js     télémétrie du moteur arrière : configuration, lecture, flux (testé)
+js/quality.js       valeurs aberrantes, trous, âge des valeurs, flux muet, thème (pur, testé)
 js/simulator.js     mode démo
 js/store.js         stockage local (réglages, historique)
 test/               tests node:test

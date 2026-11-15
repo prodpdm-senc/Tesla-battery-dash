@@ -4,8 +4,9 @@
 
 /* global d3 */
 
-import { statesToSamples } from './history.js?v=18';
-import { detectChargingSessions, detectHeatingSessions, linkHeatingToCharging } from './sessions.js?v=18';
+import { statesToSamples } from './history.js?v=19';
+import { detectChargingSessions, detectHeatingSessions, linkHeatingToCharging } from './sessions.js?v=19';
+import { linearFit } from './estimator.js?v=19';
 
 const MIN = 60000;
 // interval = secondes entre deux points demandés à Tessie (réponse plus légère sur de longues périodes).
@@ -41,6 +42,14 @@ export class SessionsView {
     this.loadedFor = null;
     this.heatChart = new XYChart($('chartHeat'), { xUnit: 'min', yUnit: '°C', xLabel: (v) => `${Math.round(v)} min` });
     this.chargeChart = new XYChart($('chartCharge'), { xUnit: '%', yUnit: 'kW', xLabel: (v) => `${Math.round(v)} %`, xDomain: [0, 100] });
+    this.chargeMode = 'curves'; // 'curves' | 'scatter' (température au branchement → puissance de pointe)
+    $('chargeMode').addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      this.chargeMode = b.dataset.mode;
+      for (const x of $('chargeMode').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
+      this.render();
+    });
 
     $('sessPeriod').addEventListener('click', (e) => {
       const b = e.target.closest('button');
@@ -155,6 +164,7 @@ export class SessionsView {
         <div class="sess-top"><span>${esc(day(c.t0))} · ${hm(c.t0)}</span><span class="sess-big">${f1(c.socStart, 0)} → ${f1(c.socEnd, 0)} %</span></div>
         <div class="sess-sub">+${f1(c.energyKwh)} kWh · pic ${f1(c.peakKw, 0)} kW · moy. ${f1(c.avgKw, 0)} kW · ${dur(c.durationMs)}</div>
         <div class="sess-sub">batterie ${f1(c.tempStart)} → ${f1(c.tempPeak)} °C · ext. ${f1(c.outsideTemp, 0)} °C</div>
+        <div class="sess-sub sess-fast">≥ 100 kW : ${f1(c.minAbove100, 0)} min · après 10 / 20 / 30 min : ${kwhAfter(c)}</div>
       </li>`).join('') : '<li class="sess-empty">Aucune recharge rapide (DC) sur cette période.</li>';
 
     // Chauffes : température du module le plus froid depuis le début de la chauffe.
@@ -171,17 +181,61 @@ export class SessionsView {
     const spread = hi - lo >= 1; // une seule température (ou presque) : pas de dégradé
     const color = (t) => (typeof d3 === 'undefined' || !Number.isFinite(t) ? css('--text-muted')
       : !spread ? css('--series-1') : d3.interpolateRgb(css('--series-1'), css('--series-2'))((t - lo) / (hi - lo)));
+    if (this.chargeMode === 'scatter') return this.renderScatter(sel, color);
+    $('chargeChartTitle').textContent = 'Courbes de recharge rapide';
+    this.chargeChart.setUnits('%', 'kW', (v) => `${Math.round(v)} %`);
     this.chargeChart.update(this.charges.map((c, i) => ({
       i, label: `${day(c.t0)} ${hm(c.t0)} · batt. ${f1(c.tempStart)} °C`,
       pts: c.curve.map((p) => ({ x: p.soc, y: p.kw })),
       color: color(c.tempStart),
       selected: sel.kind === 'charge' && sel.i === i,
-    })), { yFmt: (v) => `${f1(v, 0)} kW`, keepColor: true });
+    })), { yFmt: (v) => `${f1(v, 0)} kW`, keepColor: true, xDomain: [0, 100] });
     $('chargeLegend').innerHTML = !temps.length ? ''
       : spread ? `<span>batterie au branchement</span><span class="ramp-lbl">${f1(lo)} °C</span><span class="ramp"></span><span class="ramp-lbl">${f1(hi)} °C</span>`
         : `<span>batterie au branchement</span><span class="ramp-lbl">${f1(lo)} °C</span>`;
   }
 }
+
+/** kWh ajoutés après 10 / 20 / 30 min (— si la session est plus courte). */
+function kwhAfter(c) {
+  const k = c.kwhAfter || {};
+  return `${[10, 20, 30].map((m) => f1(k[m], 0)).join(' / ')} kWh`;
+}
+
+/**
+ * Pente de la tendance « puissance de pointe selon la température au branchement »
+ * (kW par °C), si au moins 3 recharges couvrent au moins 3 °C d'écart.
+ */
+export function peakTrend(charges) {
+  const pts = charges.filter((c) => Number.isFinite(c.tempStart) && Number.isFinite(c.peakKw)).map((c) => ({ x: c.tempStart, y: c.peakKw }));
+  if (pts.length < 3) return null;
+  const xs = pts.map((p) => p.x);
+  if (Math.max(...xs) - Math.min(...xs) < 3) return null;
+  const fit = linearFit(pts);
+  return fit ? { slope: fit.slope, intercept: fit.intercept, r2: fit.r2, n: pts.length, x0: Math.min(...xs), x1: Math.max(...xs) } : null;
+}
+
+SessionsView.prototype.renderScatter = function (sel, color) {
+  // Une recharge = un point : ce que vaut vraiment le préconditionnement sur ce pack.
+  $('chargeChartTitle').textContent = 'Température au branchement → puissance de pointe';
+  this.chargeChart.setUnits('°C', 'kW', (v) => `batterie ${f1(v)} °C`);
+  const trend = peakTrend(this.charges);
+  const xs = this.charges.map((c) => c.tempStart).filter(Number.isFinite);
+  const x0 = xs.length ? Math.min(...xs) : 0, x1 = xs.length ? Math.max(...xs) : 40;
+  const pad = Math.max(2, (x1 - x0) * 0.1);
+  this.chargeChart.update(this.charges.map((c, i) => ({
+    i, label: `${day(c.t0)} ${hm(c.t0)} · ${f1(c.socStart, 0)} → ${f1(c.socEnd, 0)} %`,
+    pts: [{ x: c.tempStart, y: c.peakKw }],
+    color: color(c.tempStart),
+    selected: sel.kind === 'charge' && sel.i === i,
+  })), {
+    points: true, keepColor: true, yFmt: (v) => `pic ${f1(v, 0)} kW`, xDomain: [x0 - pad, x1 + pad], yZero: true,
+    trend: trend ? [{ x: trend.x0, y: trend.intercept + trend.slope * trend.x0 }, { x: trend.x1, y: trend.intercept + trend.slope * trend.x1 }] : null,
+  });
+  $('chargeLegend').innerHTML = trend
+    ? `<span>tendance : ${trend.slope >= 0 ? '+' : ''}${f1(trend.slope)} kW par °C (${trend.n} recharges, R² ${f1(trend.r2, 2)})</span>`
+    : `<span>${this.charges.length < 3 ? 'au moins 3 recharges DC pour une tendance' : 'écart de température trop faible pour une tendance'}</span>`;
+};
 
 /** Petit graphique XY (plusieurs courbes) : une courbe sélectionnée en évidence, les autres en retrait. */
 class XYChart {
@@ -213,6 +267,13 @@ class XYChart {
 
   update(series, opts = {}) { this.series = series; this.opts = opts; this.render(); }
 
+  /** Change les unités des axes (ex. mode « Temp. → pic »). */
+  setUnits(xUnit, yUnit, xLabel) {
+    if (!this.svg) return;
+    this.unitX.text(xUnit); this.unitY.text(yUnit);
+    if (xLabel) this.xLabel = xLabel;
+  }
+
   render() {
     if (!this.svg) return;
     const w = Math.max(200, this.el.clientWidth), h = Math.max(80, this.el.clientHeight || 200);
@@ -224,7 +285,9 @@ class XYChart {
     if (this.opts.hLine) ys.push(this.opts.hLine.y);
     let [y0, y1] = ys.length ? d3.extent(ys) : [0, 1];
     if (y1 - y0 < 5) { y0 -= 2.5; y1 += 2.5; }
-    const x = d3.scaleLinear().domain(this.xDomain || [0, Math.max(10, d3.max(all, (p) => p.x) || 10)]).range([M.left, M.left + iw]);
+    const xd = this.opts.xDomain || this.xDomain || [0, Math.max(10, d3.max(all, (p) => p.x) || 10)];
+    const x = d3.scaleLinear().domain(xd).nice().range([M.left, M.left + iw]);
+    if (this.opts.yZero) y1 *= 1.08;
     const y = d3.scaleLinear().domain([Math.min(0, y0), y1]).nice().range([M.top + ih, M.top]);
     if (y0 > 0 && this.opts.hLine) y.domain([y0 - (y1 - y0) * 0.08, y1 + (y1 - y0) * 0.05]).nice();
     this.x = x; this.y = y;
@@ -246,10 +309,21 @@ class XYChart {
     // La courbe sélectionnée est dessinée en dernier (au-dessus des autres).
     const ordered = this.series.slice().sort((a, b) => (a.selected ? 1 : 0) - (b.selected ? 1 : 0));
     const anySel = this.series.some((s) => s.selected);
-    this.gLines.selectAll('path').data(ordered, (s) => s.i).join('path')
+    const stroke = (s) => (s.color && (this.opts.keepColor || s.selected) ? s.color : s.selected ? css('--series-1') : css('--text-muted'));
+    if (this.opts.trend) {
+      const [a, b] = this.opts.trend;
+      this.gExtra.append('line').attr('class', 'trend-line').attr('x1', x(a.x)).attr('y1', y(a.y)).attr('x2', x(b.x)).attr('y2', y(b.y));
+    }
+    // Nuage de points : un cercle par série (sélectionné plus gros, cerclé).
+    this.gLines.selectAll('circle').data(this.opts.points ? ordered.filter((s) => s.pts.length && Number.isFinite(s.pts[0].x) && Number.isFinite(s.pts[0].y)) : [], (s) => s.i)
+      .join('circle').attr('class', 'scatter-dot')
+      .attr('cx', (s) => x(s.pts[0].x)).attr('cy', (s) => y(s.pts[0].y))
+      .attr('r', (s) => (s.selected ? 8 : 6)).attr('fill', stroke)
+      .attr('data-selected', (s) => String(!!s.selected));
+    this.gLines.selectAll('path').data(this.opts.points ? [] : ordered, (s) => s.i).join('path')
       .attr('class', 'series')
       .attr('d', (s) => line(s.pts))
-      .attr('stroke', (s) => (s.color && (this.opts.keepColor || s.selected) ? s.color : s.selected ? css('--series-1') : css('--text-muted')))
+      .attr('stroke', stroke)
       .attr('stroke-width', (s) => (s.selected ? 3 : 1.5))
       .attr('opacity', (s) => (!anySel || s.selected ? 1 : this.opts.keepColor ? 0.45 : 0.35));
     this.overlay.attr('x', M.left).attr('y', M.top).attr('width', iw).attr('height', ih);

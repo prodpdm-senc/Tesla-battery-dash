@@ -181,6 +181,9 @@ export class LiveStream {
     this.stopped = true;
     this.ws = null;
     this.timer = null;
+    this.open = false;
+    this.openAt = null;
+    this.lastMsgAt = null;
   }
 
   start() {
@@ -191,6 +194,7 @@ export class LiveStream {
 
   stop() {
     this.stopped = true;
+    this.open = false;
     clearTimeout(this.timer);
     if (this.ws) { try { this.ws.close(); } catch (e) { /* */ } }
     this.ws = null;
@@ -203,10 +207,15 @@ export class LiveStream {
       ws = new WebSocket(`wss://streaming.tessie.com/${encodeURIComponent(this.vin)}?access_token=${encodeURIComponent(this.token)}`);
     } catch (e) { this._retry(); return; }
     this.ws = ws;
-    ws.onopen = () => { this.delay = 5000; this.onState('open'); };
-    ws.onclose = () => { this.onState('closed'); this._retry(); };
+    ws.onopen = () => { this.delay = 5000; this.open = true; this.openAt = Date.now(); this.onState('open'); };
+    ws.onclose = () => {
+      if (this.ws !== ws) return; // ancienne connexion remplacée par reconnect()
+      this.open = false; this.onState('closed'); this._retry();
+    };
     ws.onerror = () => { /* onclose suit */ };
     ws.onmessage = (e) => {
+      if (this.ws !== ws) return;
+      this.lastMsgAt = Date.now();
       let d;
       try { d = JSON.parse(e.data); } catch (err) { return; }
       const errs = streamErrors(d);
@@ -214,6 +223,19 @@ export class LiveStream {
       const p = streamPatch(d);
       if (p) this.onPatch(p);
     };
+  }
+
+  /** Ferme et rouvre tout de suite (flux muet). */
+  reconnect() {
+    if (this.stopped) return;
+    clearTimeout(this.timer);
+    const old = this.ws;
+    this.ws = null;
+    this.open = false;
+    if (old) { try { old.close(); } catch (e) { /* */ } }
+    this.onState('closed');
+    this.delay = 5000;
+    this._connect();
   }
 
   _retry() {
