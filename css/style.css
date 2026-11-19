@@ -199,9 +199,9 @@ h2 { font-weight: 600; font-size: 14px; }
 .end-dot { stroke: var(--surface-1); stroke-width: 2; }
 .value-label { fill: var(--text-primary); font-size: 11px; font-weight: 600; }
 .crosshair { stroke: var(--text-muted); stroke-width: 1; }
-/* Zones : préconditionnement actif (teinte d’accent), trous de données (gris) */
+/* Zones : chauffe de la batterie (teinte d’accent), trous de données (gris) */
 .zone { pointer-events: none; }
-.precond-zone { fill: var(--accent); opacity: 0.08; }
+.heat-zone { fill: var(--accent); opacity: 0.1; }
 .gap-zone { fill: var(--text-muted); opacity: 0.1; }
 .marker-line { stroke: var(--text-secondary); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.8; }
 .marker-label { fill: var(--text-secondary); font-family: var(--font); font-size: 10px; font-weight: 500; }

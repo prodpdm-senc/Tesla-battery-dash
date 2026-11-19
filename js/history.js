@@ -1,4 +1,4 @@
-import { pickStatorTemp } from './telemetry.js?v=19';
+import { pickStatorTemp } from './telemetry.js?v=20';
 
 // Analyse de l'historique Tessie (/{vin}/states). Module pur, testé.
 // La forme exacte de la réponse n'est pas documentée publiquement : on cherche
@@ -246,7 +246,6 @@ export function statesToSamples(json) {
       shiftState: r.shift_state || null,
       vehicleState: r.state || null,
       statorTemp: pickStatorTemp(r),
-      inverterTemp: pickStatorTemp(r, 'inverter'),
       heatsinkTemp: pickStatorTemp(r, 'heatsink'),
       fromHistory: true,
     });

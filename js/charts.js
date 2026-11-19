@@ -3,7 +3,7 @@
 
 /* global d3 */
 
-import { gapThreshold, splitAtGaps, gapZones } from './quality.js?v=19';
+import { gapThreshold, splitAtGaps, gapZones } from './quality.js?v=20';
 
 // Marges identiques pour les deux graphiques : les axes de temps s'alignent.
 const M = { top: 24, right: 62, bottom: 22, left: 40 };
@@ -251,6 +251,7 @@ export function createCharts({ tempEl, motorEl }) {
     extraTip: [
       { label: 'Écart', get: (d) => (d.tempMin != null && d.tempMax != null ? d.tempMax - d.tempMin : null) },
       { label: 'Précond.', get: (d) => (d.preconditioning ? 'actif' : null), fmt: (v) => v },
+      { label: 'Puissance', get: (d) => d.powerKw, fmt: (v) => `${v.toFixed(1)} kW` },
     ],
     series: [
       { key: 'tempMax', label: 'Module max', short: 'max', color: '--series-2', unit: '°C' },
@@ -263,8 +264,7 @@ export function createCharts({ tempEl, motorEl }) {
     unit: '°C', height: 180, yMinSpan: 10,
     series: [
       { key: 'statorTemp', label: 'Stator', short: 'stator', color: '--series-4', unit: '°C', connect: true },
-      { key: 'inverterTemp', label: 'Onduleur', short: 'onduleur', color: '--series-2', unit: '°C', connect: true },
-      { key: 'heatsinkTemp', label: 'Dissipateur', short: 'dissip.', color: '--series-1', unit: '°C', connect: true },
+      { key: 'heatsinkTemp', label: 'Échangeur de chaleur', short: 'échangeur', color: '--series-1', unit: '°C', connect: true },
     ],
   });
   return { temp, motor };

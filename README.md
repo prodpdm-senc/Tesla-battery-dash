@@ -8,7 +8,7 @@ Données via l'API de [Tessie](https://developer.tessie.com). Page statique, san
 
 - **Graphique de température** : module min et max (bande), ligne de cible et projection pointillée jusqu'à la cible.
 - **ETA** : temps restant, heure d'arrivée et plage d'incertitude.
-- **Moteur arrière** (graphique du bas) : températures du stator, de l'onduleur et du dissipateur de l'unité arrière. Sur une Model 3 LFP, c'est surtout ce moteur, opéré de façon volontairement inefficace, qui chauffe le glycol puis la batterie. La puissance reste dans les jauges.
+- **Moteur arrière** (graphique du bas) : températures du stator et de l'échangeur de chaleur de l'unité arrière. Sur une Model 3 LFP, c'est surtout ce moteur, opéré de façon volontairement inefficace, qui chauffe le glycol puis la batterie. La puissance reste dans les jauges.
 - **Jauges en barres verticales** (panneau de gauche) : tension, courant, puissance, charge (avec repère de la limite), chargeur et température extérieure, avec la valeur en texte dessous. Les grandeurs signées partent d'une ligne du zéro : vers le haut si positif, vers le bas si négatif. Les échelles fixes se modifient dans `GAUGES` (`js/app.js`).
 - **États** : recharge, chauffage batterie, préconditionnement.
 - **Fins de chauffe observées** (dans Réglages) : la température est notée quand le préconditionnement se termine, ou quand la puissance consommée chute alors que l'auto est stationnée et le préconditionnement encore actif. Le drapeau « chauffage batterie » ne suffit pas : il peut rester faux pendant la chauffe. Ça permet de **calibrer la vraie cible du BMS** (voir plus bas).
@@ -41,16 +41,19 @@ Il faut confirmer que `api.tessie.com` accepte les appels directs depuis un navi
 En mode Direct, le dashboard reste connecté au flux en direct de Tessie (`wss://streaming.tessie.com/{VIN}?access_token=…`, [documentation](https://developer.tessie.com/reference/access-tesla-fleet-telemetry)). Les valeurs arrivent sous la forme `{ key, value: { stringValue: "41.500" } }` et seulement quand elles changent :
 
 - **Batterie** : `ModuleTempMin/Max`, `PackVoltage`, `PackCurrent`, `Soc`, `EnergyRemaining`, puissance de recharge, `OutsideTemp`, `VehicleSpeed`. Une nouvelle mesure au plus toutes les 10 s (les champs absents sont repris de la mesure précédente) : les courbes et le décompte suivent la chauffe presque en direct.
-- **Moteur arrière** : stator, onduleur, dissipateur (Profiler de Tessie activé).
+- **Moteur arrière** : stator et échangeur de chaleur (Profiler de Tessie activé).
+- **Le flux fait foi** : tant qu'il est connecté, ses valeurs ne sont jamais remplacées par le cache de Tessie (sondage), qui peut être en retard. Le flux n'envoyant un champ que lorsqu'il change, une valeur périmée restait sinon affichée. Le sondage ajoute alors une mesure à l'heure actuelle (valeurs du flux + préconditionnement, état de recharge…) pour que les courbes avancent.
+- **Au plus un rendu par seconde** : avec le Profiler, le flux peut envoyer plusieurs messages par seconde ; tout redessiner à chacun saturait le navigateur de l'auto (page figée après moins d'une minute en v19). Les messages sont tous appliqués, seul l'affichage est regroupé.
+- Messages renvoyés après une reconnexion et plus vieux que la dernière valeur reçue : ignorés.
 - Les appels à `/battery` et `/state` (toutes les 30 s par défaut) continuent en renfort et fournissent ce que le flux n'a pas (préconditionnement, état de recharge, rapport…).
 - **Erreurs** du flux (ex. `unsupported_field`) : affichées si elles concernent un champ utilisé ; toutes visibles dans *Tester le flux*, avec les changements de connectivité.
 
 ## Fiabilité et qualité des données
 
-- **Source affichée** dans l'en-tête : « En direct · flux » (point vert) ou « En direct · sondage 15 s » (point ambre) quand le flux est coupé. Le détail (dernier message, reconnexions, valeurs écartées) est au bas des Réglages.
+- **Source affichée** dans l'en-tête : « En direct · flux » (point vert) ou « En direct · sondage 15 s » (point ambre) quand le flux est coupé. Le détail (messages par minute, dernier message, reconnexions, valeurs écartées) est au bas des Réglages.
 - **Flux muet** : si l'auto roule, chauffe ou recharge et que rien n'arrive pendant 3 min, la connexion est refaite automatiquement.
 - **Sondage adaptatif** : flux coupé → `/state` toutes les 15 s au plus ; flux rétabli → retour à l'intervalle des Réglages (30 s par défaut).
-- **Valeurs aberrantes écartées** avant le calcul : hors plage (tension < 200 V pendant la veille, SOC > 100 %…), saut de température de module de plus de 3 °C ou de 2 °C/min, min au-dessus du max. Un champ écarté 3 fois de suite est ensuite accepté (c'était alors la valeur précédente qui était fausse).
+- **Valeurs aberrantes écartées** avant le calcul : hors plage (tension < 200 V pendant la veille, SOC > 100 %…), saut de température de module de plus de 3 °C ou de 2 °C/min (comparé à la dernière valeur de la même source), min au-dessus du max. Un champ écarté 3 fois de suite est ensuite accepté (c'était alors la valeur précédente qui était fausse).
 - **Trous de données** : les courbes sont coupées et la zone est grisée (plus de 5 min, ou 4 fois l'espacement habituel) au lieu d'être reliées par une fausse pente.
 - **Âge des valeurs** : une jauge dont la valeur a plus de 3 min est atténuée et affiche « il y a 4 min ».
 - **ETA incertaine** (moins de 3 min de données, R² < 0,5, plage infinie ou plus large que 60 % de l'ETA) : affichée « ≈ 25 min » sans heure précise.
@@ -58,14 +61,14 @@ En mode Direct, le dashboard reste connecté au flux en direct de Tessie (`wss:/
 
 ## Affichage
 
-- **Bande de préconditionnement** (teinte bleue) sur les deux graphiques, et repère « fin de chauffe » quand une fin de chauffe est détectée. L'historique de Tessie n'enregistre pas le préconditionnement : la bande ne couvre que ce qui a été vu en direct.
+- **Bande de chauffe de la batterie** (teinte bleue) sur les deux graphiques, et repère « fin de chauffe ». La bande suit la chauffe de la batterie, pas le préconditionnement : drapeau du chauffage, ou auto stationnée en préconditionnement qui tire au moins 3 kW (la cabine seule tire ~1 kW), ou montée du module le plus froid d'au moins 0,25 °C/min hors recharge (couvre la chauffe en roulant et l'historique de Tessie).
 - **Puissance de chauffe estimée** sous la jauge Puissance pendant un préconditionnement à l'arrêt : puissance qui sort de la batterie moins la consommation de base de l'auto stationnée (médiane des 30 min précédentes, sinon 0,4 kW). Elle inclut la climatisation de l'habitacle.
 - **Écart des modules** (max − min) sous la température, en ambre à partir de 6 °C ; aussi dans l'infobulle du graphique.
 - **Thème** (Réglages) : comme l'appareil, sombre, clair, ou **selon le soleil** (lever et coucher calculés avec la position de l'auto, sinon nuit de 19 h à 7 h). La position ne sert qu'à ce calcul et n'est jamais enregistrée.
 
 ## Températures du moteur (Fleet Telemetry)
 
-Stator, onduleur et dissipateur de l'unité arrière (`DiStatorTempR`, `DiInverterTR`, `DiHeatsinkTR`, en °C).
+Stator et échangeur de chaleur de l'unité arrière (`DiStatorTempR`, `DiHeatsinkTR`, en °C). L'onduleur (`DiInverterTR`) n'est plus lu.
 
 **Pour les recevoir : activer le Profiler dans Tessie (web).** Ces valeurs n'apparaissent ni dans `/state` ni dans l'historique : elles arrivent par le **flux en direct** de Tessie (`wss://streaming.tessie.com/{VIN}`, messages `{ vin, createdAt, isResend, data: [{ key, value }] }`, seulement les champs qui ont changé). En mode Direct, le dashboard garde une connexion ouverte à ce flux (reconnexion automatique) et applique les dernières températures du moteur aux mesures, ce qui alimente le graphique « Moteur arrière » et la pastille « Moteur arr. ».
 
@@ -73,7 +76,7 @@ Dans *Réglages → Avancé → Moteur arrière* :
 
 - **Vérifier** (lecture seule) : champs configurés, indicateurs (`synced`, `limit_reached`, `key_paired`…), valeurs dans l'état et l'historique.
 - **Tester le flux (60 s)** : connexion, messages et champs reçus.
-- **Activer ces 3 champs** : seulement utile sans le Profiler. Envoie `{ fields }` (champs actuels inchangés + les 3 du moteur) ; jamais le reste de la configuration de Tessie ; rien n'est envoyé si la configuration est illisible ou si `limit_reached` est vrai.
+- **Activer ces 2 champs** : seulement utile sans le Profiler. Envoie `{ fields }` (champs actuels inchangés + les 2 du moteur) ; jamais le reste de la configuration de Tessie ; rien n'est envoyé si la configuration est illisible ou si `limit_reached` est vrai.
 
 ## Page Sessions
 

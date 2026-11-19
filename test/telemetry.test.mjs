@@ -19,7 +19,7 @@ test('configuredFields lit les champs, où qu\'ils soient', () => {
 
 test('withStatorField ajoute le champ sans rien retirer', () => {
   const body = withStatorField(tessieConfig);
-  assert.deepEqual(Object.keys(body.fields), ['BatteryLevel', 'Location', 'DiStatorTempR', 'DiInverterTR', 'DiHeatsinkTR']);
+  assert.deepEqual(Object.keys(body.fields), ['BatteryLevel', 'Location', 'DiStatorTempR', 'DiHeatsinkTR']);
   assert.deepEqual(body.fields.DiStatorTempR, { interval_seconds: 60 });
   // Seulement { fields } : le serveur, le certificat, l'expiration, etc. ne sont jamais renvoyés.
   assert.deepEqual(Object.keys(body), ['fields']);
@@ -84,16 +84,17 @@ test('itemValue', () => {
 import { motorFromMessage, attachMotor } from '../js/telemetry.js';
 
 test('motorFromMessage : message du flux → températures du moteur', () => {
-  const m = motorFromMessage({ createdAt: '2026-11-14T19:30:00Z', data: [{ key: 'DiStatorTempR', value: 24 }, { key: 'DiInverterTR', value: 25 }] });
+  const m = motorFromMessage({ createdAt: '2026-11-14T19:30:00Z', data: [{ key: 'DiStatorTempR', value: 24 }, { key: 'DiInverterTR', value: 25 }, { key: 'DiHeatsinkTR', value: 23 }] });
   assert.equal(m.statorTemp, 24);
-  assert.equal(m.inverterTemp, 25);
-  assert.equal(m.heatsinkTemp, null);
+  assert.equal(m.heatsinkTemp, 23);
+  assert.equal('inverterTemp' in m, false); // onduleur plus lu
+  assert.equal(motorFromMessage({ data: [{ key: 'DiInverterTR', value: 25 }] }), null);
   assert.equal(m.t, Date.parse('2026-11-14T19:30:00Z'));
   assert.equal(motorFromMessage({ data: [{ key: 'PackCurrent', value: 3 }] }), null);
 });
 
 test('attachMotor : seulement si récent et sans écraser', () => {
-  const motor = { t: 100000, statorTemp: 60, inverterTemp: 45, heatsinkTemp: null };
+  const motor = { t: 100000, statorTemp: 60, heatsinkTemp: null };
   assert.equal(attachMotor({ t: 130000 }, motor).statorTemp, 60);
   assert.equal(attachMotor({ t: 130000, statorTemp: 55 }, motor).statorTemp, 55);
   assert.equal(attachMotor({ t: 100000 + 10 * 60000 }, motor).statorTemp, undefined);
