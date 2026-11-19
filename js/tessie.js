@@ -1,7 +1,7 @@
 // Client Tessie minimal + normalisation des données en un « échantillon » plat.
 // Docs : https://developer.tessie.com
 
-import { pickStatorTemp } from './telemetry.js?v=19';
+import { pickStatorTemp } from './telemetry.js?v=20';
 
 export class ApiError extends Error {
   constructor(message, { status = 0, kind = 'http' } = {}) {
@@ -126,7 +126,6 @@ export function normalize(battery, state) {
     vehicleState: st.state || null,
     // Moteur arrière (chauffe la batterie sur une Model 3 LFP), si la télémétrie le transmet.
     statorTemp: pickStatorTemp(st),
-    inverterTemp: pickStatorTemp(st, 'inverter'),
     heatsinkTemp: pickStatorTemp(st, 'heatsink'),
     shiftState: ds.shift_state || null,
     speed: num(ds.speed),

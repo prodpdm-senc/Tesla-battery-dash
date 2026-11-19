@@ -1,19 +1,19 @@
-import { TessieClient, ApiError } from './tessie.js?v=19';
-import { Simulator } from './simulator.js?v=19';
-import { estimate, pickTemp, formatDuration } from './estimator.js?v=19';
-import { settings as settingsStore, history, observations, appendSample } from './store.js?v=19';
-import { createCharts } from './charts.js?v=19';
-import { Gauges } from './gauges.js?v=19';
-import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=19';
-import { DRIVE_FIELDS, configuredFields, withStatorField, findDriveValues, streamProbe, configFlags, LiveStream, attachMotor, applyPatch } from './telemetry.js?v=19';
-import { SessionsView, demoHistory } from './sessionsView.js?v=19';
-import { detectHeatingEnd } from './events.js?v=19';
-import { cleanSample, FieldClock, intervals, gapThreshold, isActive, streamSilent, heatingPowerKw, isNight } from './quality.js?v=19';
+import { TessieClient, ApiError } from './tessie.js?v=20';
+import { Simulator } from './simulator.js?v=20';
+import { estimate, pickTemp, formatDuration } from './estimator.js?v=20';
+import { settings as settingsStore, history, observations, appendSample } from './store.js?v=20';
+import { createCharts } from './charts.js?v=20';
+import { Gauges } from './gauges.js?v=20';
+import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=20';
+import { DRIVE_FIELDS, configuredFields, withStatorField, findDriveValues, streamProbe, configFlags, LiveStream, attachMotor, applyPatch } from './telemetry.js?v=20';
+import { SessionsView, demoHistory } from './sessionsView.js?v=20';
+import { detectHeatingEnd } from './events.js?v=20';
+import { cleanSample, FieldClock, heatingZones, isActive, streamSilent, heatingPowerKw, isNight } from './quality.js?v=20';
 
 // Version de l'app. Le même numéro est ajouté à l'adresse de chaque fichier (?v=…)
 // pour forcer les navigateurs (Chrome iPhone, auto) à charger la nouvelle version.
 // À augmenter à chaque mise en ligne ; test/version.test.mjs vérifie la cohérence.
-export const APP_VERSION = '19';
+export const APP_VERSION = '20';
 
 const DEFAULTS = {
   vin: '',
@@ -34,6 +34,9 @@ const MAX_BACKOFF_MS = 5 * 60000;
 const FIELD_STALE_MS = 3 * 60000;   // jauge atténuée au-delà
 const FAST_POLL_S = 15;             // sondage quand le flux en direct est coupé
 const WATCHDOG_MS = 30000;
+// Au plus un rendu par seconde : avec le Profiler, le flux peut envoyer plusieurs messages
+// par seconde, et tout redessiner à chacun saturait le navigateur de l'auto (page figée).
+const RENDER_MIN_MS = 1000;
 
 const $ = (id) => document.getElementById(id);
 const dig = (o, path) => path.split('.').reduce((a, k) => (a == null ? undefined : a[k]), o);
@@ -56,6 +59,7 @@ const state = {
   streamState: 'off', // 'off' | 'connecting' | 'open' | 'closed'
   streamRestarts: 0,  // reconnexions forcées (flux muet)
   watchdog: null,
+  live: {},           // dernières valeurs reçues du flux : { champ: { v, t } } (source prioritaire)
   fields: new FieldClock(), // âge de chaque valeur
   rejected: 0,        // valeurs écartées (hors plage, saut impossible)
   rejectStreak: {},   // écarts consécutifs par champ
@@ -83,7 +87,7 @@ function init() {
     },
     demoSamples: () => (state.sim ? (state.demoHist || (state.demoHist = demoHistory())) : null),
     getTarget: () => +state.s.target,
-    onUseTarget: (t) => { state.s.target = t; settingsStore.save(state.s); render(); },
+    onUseTarget: (t) => { state.s.target = t; settingsStore.save(state.s); render(true); },
   });
   bindUi();
   syncRangeButtons();
@@ -104,7 +108,7 @@ function startLive() {
     state.samples = [];
     setStatus('idle', 'Non configuré');
     banner('info', 'Entre ton token Tessie et ton VIN dans <b>Réglages</b>, ou clique sur <b>Démo</b> pour voir le dashboard avec des données simulées.');
-    render();
+    render(true);
     return;
   }
   state.samples = history.load(state.s.vin);
@@ -113,7 +117,7 @@ function startLive() {
   state.rejected = 0;
   state.rejectStreak = {};
   banner(null);
-  render();
+  render(true);
   poll();
   backfill();
   startStream();
@@ -128,7 +132,7 @@ function startDemo() {
   state.fields.reset();
   $('btnDemo').setAttribute('aria-pressed', 'true');
   banner('info', 'Mode démo : préconditionnement simulé d’un pack LFP par −5 °C. Aucune donnée réelle.');
-  render();
+  render(true);
   poll();
   if (state.s.view === 'sessions') sessions.show('demo');
 }
@@ -149,6 +153,7 @@ function stop() {
  */
 function startStream() {
   state.motor = null;
+  state.live = {};
   state.streamState = 'connecting';
   state.streamRestarts = 0;
   let lastSave = 0;
@@ -162,7 +167,7 @@ function startStream() {
       if (!p) return;
       state.fields.note(p.patch, p.t);
       const motor = {};
-      for (const k of ['statorTemp', 'inverterTemp', 'heatsinkTemp']) if (p.patch[k] != null) motor[k] = p.patch[k];
+      for (const k of ['statorTemp', 'heatsinkTemp']) if (p.patch[k] != null) motor[k] = p.patch[k];
       if (Object.keys(motor).length) state.motor = Object.assign({}, state.motor || {}, motor, { t: p.t });
       const prev = state.samples[state.samples.length - 1];
       const { sample, added } = applyPatch(state.samples, p);
@@ -199,13 +204,33 @@ function startStream() {
   }, WATCHDOG_MS);
 }
 
-/** Écarte d'un patch du flux les valeurs impossibles ; null s'il ne reste rien. */
+/**
+ * Écarte d'un patch du flux les valeurs impossibles et les valeurs plus vieilles que la
+ * dernière reçue pour le même champ (messages renvoyés après une reconnexion) ; garde
+ * le reste comme « dernière valeur du flux ». null s'il ne reste rien.
+ * Le saut de température est comparé à la dernière valeur DU FLUX, jamais au cache de
+ * Tessie (sondage) : sinon une vraie valeur pouvait être rejetée contre une valeur périmée,
+ * et comme le flux ne la renvoie que si elle change, l'affichage restait figé.
+ */
 function cleanPatch(p) {
-  const prev = state.samples[state.samples.length - 1];
+  const live = state.live;
+  const prev = live.tempMin || live.tempMax
+    ? { t: (live.tempMin || live.tempMax).t, tempMin: live.tempMin ? live.tempMin.v : null, tempMax: live.tempMax ? live.tempMax.v : null }
+    : null;
   const c = cleanData(prev, Object.assign({ t: p.t }, p.patch));
   const patch = {};
-  for (const k of Object.keys(p.patch)) if (c[k] != null) patch[k] = c[k];
+  for (const k of Object.keys(p.patch)) {
+    if (c[k] == null) continue;
+    if (live[k] && p.t < live[k].t) continue; // renvoi plus ancien que ce qu'on a déjà
+    patch[k] = c[k];
+    live[k] = { v: c[k], t: p.t };
+  }
   return Object.keys(patch).length ? { t: p.t, patch } : null;
+}
+
+/** Flux connecté : ses valeurs sont à jour (il n'envoie un champ que lorsqu'il change). */
+function streamFresh() {
+  return !state.sim && state.streamState === 'open' && Object.keys(state.live).length > 0;
 }
 
 /** cleanSample + compteur d'écarts ; un champ écarté 3 fois de suite est ensuite accepté. */
@@ -258,7 +283,7 @@ function applyView() {
   $('viewSessions').hidden = v !== 'sessions';
   for (const b of $('viewSeg').querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.view === v));
   if (v === 'sessions') sessions.show(state.sim ? 'demo' : `live:${state.s.vin}`);
-  else render();
+  else render(true);
 }
 
 /**
@@ -329,6 +354,19 @@ function onSample(raw) {
   // Position : seulement pour le thème selon le soleil, jamais enregistrée.
   if (raw.latitude != null && raw.longitude != null) state.pos = { lat: raw.latitude, lon: raw.longitude };
   delete raw.latitude; delete raw.longitude;
+  if (streamFresh()) {
+    // Flux connecté : il fait foi pour tous les champs qu'il a déjà envoyés. Le cache de
+    // Tessie (ce sondage) peut être en retard ; sans cela il écrasait la vraie valeur, et le
+    // flux ne la renvoyant que si elle change, l'affichage restait figé sur la valeur périmée.
+    // Ce sondage sert alors de « battement » : une mesure à l'heure actuelle, valeurs du flux
+    // reprises, plus ce que seul /state fournit (préconditionnement, recharge…).
+    const now = Date.now();
+    const fresh = {};
+    for (const k of Object.keys(state.live)) { raw[k] = state.live[k].v; fresh[k] = true; }
+    if (raw.voltage != null && raw.current != null) raw.powerKw = (raw.voltage * raw.current) / 1000;
+    raw.t = Math.max(raw.t || 0, now);
+    state.fields.note(fresh, now);
+  }
   const sample = state.sim ? raw : cleanData(prev && prev.t <= raw.t ? prev : null, raw);
   state.fields.note(sample, sample.t);
   attachMotor(sample, state.motor);
@@ -375,7 +413,26 @@ function computeEstimate() {
 
 // ───────────────────────── Affichage ─────────────────────────
 
-function render() {
+let renderTimer = null;
+let lastRenderAt = 0;
+
+/**
+ * Demande un rendu. Les rendus rapprochés sont regroupés (au plus un par seconde) ;
+ * `now` = tout de suite (action de l'utilisateur).
+ */
+function render(now) {
+  if (now) {
+    clearTimeout(renderTimer); renderTimer = null;
+    lastRenderAt = Date.now();
+    renderNow();
+    return;
+  }
+  if (renderTimer) return;
+  const wait = Math.max(0, lastRenderAt + RENDER_MIN_MS - Date.now());
+  renderTimer = setTimeout(() => { renderTimer = null; lastRenderAt = Date.now(); renderNow(); }, wait);
+}
+
+function renderNow() {
   applyTheme();
   const est = (state.est = computeEstimate());
   const last = state.samples[state.samples.length - 1];
@@ -400,6 +457,7 @@ function renderStatus(last) {
   $('lastUpdate').textContent = [
     state.lastOkAt ? `Dernière lecture : ${clock(state.lastOkAt)}.` : '',
     st ? `Flux : ${{ open: 'connecté', closed: 'coupé, reconnexion…', connecting: 'connexion…' }[state.streamState] || '—'}`
+      + `${st.open && st.openAt && Date.now() - st.openAt > 60000 ? `, ${Math.round(st.msgCount / ((Date.now() - st.openAt) / 60000))} msg/min` : ''}`
       + `${st.lastMsgAt ? `, dernier message ${clock(st.lastMsgAt)}` : ''}${state.streamRestarts ? `, ${state.streamRestarts} reconnexion(s) forcée(s)` : ''}.` : '',
     state.rejected ? `${state.rejected} valeur(s) aberrante(s) écartée(s).` : '',
   ].filter(Boolean).join(' ');
@@ -496,10 +554,10 @@ const CHIPS = [
     on: (s) => s.chargingState === 'Charging' },
   { id: 'heater', label: 'Chauffage', on: (s) => s.heaterOn },
   { id: 'precond', label: 'Précond.', on: (s) => s.preconditioning },
-  // Stator / onduleur / dissipateur de l'unité arrière (si la télémétrie les transmet).
+  // Stator · échangeur de chaleur de l'unité arrière (Profiler de Tessie).
   { id: 'drive', label: 'Moteur arr.', on: (s) => s.statorTemp != null && s.statorTemp >= 40,
-    text: (s) => (s.statorTemp == null && s.inverterTemp == null ? '—'
-      : `${fmt(s.statorTemp, 0)} · ${fmt(s.inverterTemp, 0)} · ${fmt(s.heatsinkTemp, 0)} °C`) },
+    text: (s) => (s.statorTemp == null && s.heatsinkTemp == null ? '—'
+      : `${fmt(s.statorTemp, 0)} · ${fmt(s.heatsinkTemp, 0)} °C`) },
 ];
 
 function chargingLabel(s) {
@@ -538,18 +596,29 @@ function renderCharts(est, last) {
     projection = [{ t: est.tLast, y: est.tempFit }, { t: est.tLast + est.etaMs, y: target }];
   }
   const domain = [now - rangeMs, now + future];
-  // Bandes : préconditionnement actif (l'historique Tessie ne l'enregistre pas : direct seulement).
-  const visible = state.samples.filter((x) => x.t >= domain[0]);
-  const zones = intervals(visible, (x) => x.preconditioning === true || x.heaterOn === true, gapThreshold(visible))
-    .map((z) => Object.assign(z, { cls: 'precond-zone' }));
+  // Bandes bleues : chauffe de la batterie (pas le préconditionnement : la cabine peut se
+  // préconditionner sans que la batterie chauffe). Calcul mis en cache : il refait une
+  // régression par point, inutile tant que les mesures ne changent pas.
+  const zones = heatZonesCached(domain[0]).map((z) => ({ t0: z.t0, t1: z.t1, cls: 'heat-zone' }));
   // Repères : fins de chauffe détectées.
   const markers = state.obs.filter((o) => o.t >= domain[0]).map((o) => ({ t: o.t, label: 'fin de chauffe' }));
   // La projection suit la métrique choisie ; la bande montre l'étendue min–max.
   charts.temp.update(state.samples, domain, { band: ['tempMin', 'tempMax'], target, projection, yInclude: [target], zones, markers });
-  const hasMotor = state.samples.some((x) => x.statorTemp != null || x.inverterTemp != null || x.heatsinkTemp != null);
+  const hasMotor = state.samples.some((x) => x.statorTemp != null || x.heatsinkTemp != null);
   $('motorEmpty').hidden = hasMotor;
-  $('legendPrecond').hidden = !zones.length;
+  for (const el of document.querySelectorAll('.legend-heat')) el.hidden = !zones.length;
   charts.motor.update(state.samples, domain, { zones, markers: markers.map((m) => ({ t: m.t })) });
+}
+
+let heatCache = { key: '', zones: [] };
+function heatZonesCached(from) {
+  const n = state.samples.length;
+  const last = state.samples[n - 1];
+  const key = `${n}:${last ? last.t : 0}:${Math.floor(from / 30000)}:${last ? `${last.tempMin}:${last.powerKw}:${last.preconditioning}` : ''}`;
+  if (heatCache.key !== key) {
+    heatCache = { key, zones: heatingZones(state.samples.filter((x) => x.t >= from - 10 * 60000)) };
+  }
+  return heatCache.zones;
 }
 
 // ───────────────────────── Thème et écran ─────────────────────────
@@ -634,7 +703,7 @@ function bindUi() {
     state.s.rangeMin = +m;
     settingsStore.save(state.s);
     syncRangeButtons();
-    render();
+    render(true);
   });
   $('obsList').addEventListener('click', (e) => {
     const btn = e.target.closest('button');
@@ -645,7 +714,7 @@ function bindUi() {
     if (v == null) return;
     state.s.target = v;
     settingsStore.save(state.s);
-    render();
+    render(true);
   });
   document.addEventListener('visibilitychange', () => {
     // Le verrou d'écran est relâché quand la page est cachée : render() le redemande.
@@ -683,7 +752,7 @@ function bindUi() {
   $('btnClearHist').addEventListener('click', () => {
     if (!state.s.vin) return;
     history.clear(state.s.vin);
-    if (!state.sim) { state.samples = []; render(); }
+    if (!state.sim) { state.samples = []; render(true); }
     formMsg('Historique effacé.');
   });
 }
@@ -736,7 +805,7 @@ function saveSettings(fd) {
     state.errors = 0;
     startLive();
   } else {
-    render();
+    render(true);
     if (!state.sim) schedule();
   }
 }
@@ -837,7 +906,7 @@ async function telCheck() {
   } catch (e) { lines.push(`Configuration illisible : ${e.message}`); }
   try {
     const vals = findDriveValues(await c.state(vin));
-    lines.push(vals.length ? `Dans /state : ${vals.map((v) => `${v.path} = ${v.value}`).join(' ; ')}` : 'Dans /state : aucune valeur stator / onduleur / dissipateur.');
+    lines.push(vals.length ? `Dans /state : ${vals.map((v) => `${v.path} = ${v.value}`).join(' ; ')}` : 'Dans /state : aucune valeur stator / échangeur de chaleur.');
   } catch (e) { lines.push(`/state illisible : ${e.message}`); }
   try {
     const now = Math.floor(Date.now() / 1000);
@@ -845,7 +914,7 @@ async function telCheck() {
     const recs = findRecords(json);
     const cols = recs[0] ? Object.keys(recs[0]).filter((k) => /stator|inverter|heatsink/i.test(k)) : [];
     const n = statesToSamples(json).filter((x) => x.statorTemp != null).length;
-    lines.push(`Historique (1 h) : ${cols.length ? cols.join(', ') : 'aucune colonne stator / onduleur / dissipateur'} · ${n} point(s) avec une température de stator.`);
+    lines.push(`Historique (1 h) : ${cols.length ? cols.join(', ') : 'aucune colonne stator / échangeur de chaleur'} · ${n} point(s) avec une température de stator.`);
   } catch (e) { lines.push(`Historique illisible : ${e.message}`); }
   telOut(lines.join('\n'));
 }

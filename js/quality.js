@@ -2,10 +2,13 @@
 //  - cleanSample : écarte les valeurs physiquement impossibles avant qu'elles faussent l'ETA.
 //  - splitAtGaps / gapZones : coupe les courbes aux trous de données (pas de fausse pente).
 //  - FieldClock : âge de chaque valeur (les mesures sont reprises d'un point à l'autre).
-//  - intervals : périodes où une condition est vraie (ex. préconditionnement).
+//  - intervals : périodes où une condition est vraie.
+//  - heatingZones : périodes de chauffe de la batterie (ombrage bleu des graphiques).
 //  - streamSilent : flux « ouvert » qui ne transmet plus rien alors que l'auto est active.
 //  - heatingPowerKw : puissance consommée par la chauffe, auto stationnée.
 //  - sunTimes / isNight : thème sombre selon le coucher du soleil.
+
+import { detectHeatingSessions } from './sessions.js?v=20';
 
 const MIN = 60000;
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -17,7 +20,7 @@ const RANGES = {
   current: [-1500, 1500],
   soc: [0, 100],
   outsideTemp: [-50, 60],
-  statorTemp: [-40, 200], inverterTemp: [-40, 150], heatsinkTemp: [-40, 150],
+  statorTemp: [-40, 200], heatsinkTemp: [-40, 150],
 };
 // Variation maximale crédible d'une température de module : 2 °C/min (la chauffe la
 // plus rapide observée est ~1 °C/min), avec un minimum de 3 °C pour la quantification.
@@ -106,6 +109,39 @@ export function intervals(points, pred, maxGapMs = 5 * MIN) {
     if (on && !cur) { cur = { t0: p.t, t1: p.t }; out.push(cur); }
   }
   return out.filter((z) => z.t1 > z.t0);
+}
+
+/** Fusionne des périodes qui se chevauchent (ou séparées de moins de `joinMs`). */
+export function mergeIntervals(list, joinMs = 60000) {
+  const sorted = list.filter((z) => z && z.t1 >= z.t0).slice().sort((a, b) => a.t0 - b.t0);
+  const out = [];
+  for (const z of sorted) {
+    const last = out[out.length - 1];
+    if (last && z.t0 - last.t1 <= joinMs) last.t1 = Math.max(last.t1, z.t1);
+    else out.push({ t0: z.t0, t1: z.t1 });
+  }
+  return out;
+}
+
+const isMoving = (s) => s.shiftState === 'D' || s.shiftState === 'R' || (finite(s.speed) && s.speed > 0);
+
+/**
+ * Périodes de chauffe de la batterie (et non de préconditionnement : la cabine peut se
+ * préconditionner sans que la batterie chauffe, et la chauffe s'arrête avant la fin du
+ * préconditionnement). Réunion de trois indices :
+ *  - le drapeau du chauffage (toujours faux sur certaines Model 3 LFP, mais utile ailleurs) ;
+ *  - auto stationnée en préconditionnement qui tire au moins `minKw` de la batterie
+ *    (le moteur arrière chauffe ; la cabine seule tire ~1 kW) ;
+ *  - montée de la température du module le plus froid d'au moins 0,25 °C/min hors
+ *    recharge (détection de la page Sessions) : couvre aussi la chauffe en roulant.
+ */
+export function heatingZones(points, { minKw = 3 } = {}) {
+  if (points.length < 2) return [];
+  const gap = gapThreshold(points);
+  const parked = intervals(points, (s) => s.heaterOn === true
+    || (s.preconditioning === true && !isMoving(s) && s.chargingState !== 'Charging' && finite(s.powerKw) && s.powerKw >= minKw), gap);
+  const rising = detectHeatingSessions(points).map((h) => ({ t0: h.t0, t1: h.t1 }));
+  return mergeIntervals(parked.concat(rising));
 }
 
 /**

@@ -5,8 +5,11 @@
 
 export const STATOR_FIELD = 'DiStatorTempR';
 export const STATOR_INTERVAL_S = 60; // minimum permis par Tesla pour ces champs
-/** Unité d'entraînement arrière : stator, onduleur, dissipateur (champs Fleet Telemetry). */
-export const DRIVE_FIELDS = ['DiStatorTempR', 'DiInverterTR', 'DiHeatsinkTR'];
+/**
+ * Unité d'entraînement arrière : stator et échangeur de chaleur (champs Fleet Telemetry).
+ * L'onduleur (DiInverterTR) n'est plus lu : pas utile pour suivre la chauffe.
+ */
+export const DRIVE_FIELDS = ['DiStatorTempR', 'DiHeatsinkTR'];
 
 const norm = (k) => String(k).toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -184,6 +187,7 @@ export class LiveStream {
     this.open = false;
     this.openAt = null;
     this.lastMsgAt = null;
+    this.msgCount = 0;   // messages reçus depuis l'ouverture (diagnostic : messages par minute)
   }
 
   start() {
@@ -207,7 +211,7 @@ export class LiveStream {
       ws = new WebSocket(`wss://streaming.tessie.com/${encodeURIComponent(this.vin)}?access_token=${encodeURIComponent(this.token)}`);
     } catch (e) { this._retry(); return; }
     this.ws = ws;
-    ws.onopen = () => { this.delay = 5000; this.open = true; this.openAt = Date.now(); this.onState('open'); };
+    ws.onopen = () => { this.delay = 5000; this.open = true; this.openAt = Date.now(); this.msgCount = 0; this.onState('open'); };
     ws.onclose = () => {
       if (this.ws !== ws) return; // ancienne connexion remplacée par reconnect()
       this.open = false; this.onState('closed'); this._retry();
@@ -216,6 +220,7 @@ export class LiveStream {
     ws.onmessage = (e) => {
       if (this.ws !== ws) return;
       this.lastMsgAt = Date.now();
+      this.msgCount++;
       let d;
       try { d = JSON.parse(e.data); } catch (err) { return; }
       const errs = streamErrors(d);
@@ -250,10 +255,9 @@ export class LiveStream {
 export function motorFromMessage(d) {
   const m = {
     statorTemp: pickStatorTemp(d),
-    inverterTemp: pickStatorTemp(d, 'inverter'),
     heatsinkTemp: pickStatorTemp(d, 'heatsink'),
   };
-  if (m.statorTemp == null && m.inverterTemp == null && m.heatsinkTemp == null) return null;
+  if (m.statorTemp == null && m.heatsinkTemp == null) return null;
   const t = d && d.createdAt ? Date.parse(d.createdAt) : NaN;
   m.t = Number.isFinite(t) ? t : Date.now();
   return m;
@@ -262,7 +266,7 @@ export function motorFromMessage(d) {
 /** Applique les dernières températures du moteur à un échantillon (si récentes et absentes). */
 export function attachMotor(sample, motor, maxAgeMs = 3 * 60000) {
   if (!sample || !motor || !Number.isFinite(motor.t) || Math.abs(sample.t - motor.t) > maxAgeMs) return sample;
-  for (const k of ['statorTemp', 'inverterTemp', 'heatsinkTemp']) {
+  for (const k of ['statorTemp', 'heatsinkTemp']) {
     if (sample[k] == null && motor[k] != null) sample[k] = motor[k];
   }
   return sample;
@@ -310,7 +314,7 @@ export function streamPatch(d) {
   set('speed', n('VehicleSpeed'));
   if ('BatteryHeaterOn' in items) set('heaterOn', itemBool(items.BatteryHeaterOn));
   const m = motorFromMessage(d);
-  if (m) for (const k of ['statorTemp', 'inverterTemp', 'heatsinkTemp']) set(k, m[k]);
+  if (m) for (const k of ['statorTemp', 'heatsinkTemp']) set(k, m[k]);
   if (!Object.keys(patch).length) return null;
   const t = Date.parse(d.createdAt);
   return { t: Number.isFinite(t) ? t : Date.now(), patch };

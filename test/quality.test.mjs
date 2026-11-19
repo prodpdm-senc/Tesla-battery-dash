@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cleanSample, gapThreshold, splitAtGaps, gapZones, intervals, FieldClock, formatAge,
-  isActive, streamSilent, heatingPowerKw, sunTimes, isNight } from '../js/quality.js';
+  isActive, streamSilent, heatingPowerKw, sunTimes, isNight, mergeIntervals, heatingZones } from '../js/quality.js';
 import { estimate, confidence } from '../js/estimator.js';
 import { fastChargeStats } from '../js/sessions.js';
 import { peakTrend } from '../js/sessionsView.js';
@@ -127,4 +127,29 @@ test('peakTrend : kW par °C', () => {
   assert.equal(t.n, 3);
   assert.equal(peakTrend(c.slice(0, 2)), null);
   assert.equal(peakTrend([{ tempStart: 20, peakKw: 1 }, { tempStart: 21, peakKw: 2 }, { tempStart: 20.5, peakKw: 3 }]), null);
+});
+
+test('mergeIntervals', () => {
+  assert.deepEqual(mergeIntervals([{ t0: 5, t1: 9 }, { t0: 0, t1: 4 }, { t0: 100000, t1: 200000 }], 2),
+    [{ t0: 0, t1: 9 }, { t0: 100000, t1: 200000 }]);
+});
+
+test('heatingZones : chauffe de la batterie, pas le préconditionnement', () => {
+  const s = [];
+  // 0–10 min : préconditionnement de la cabine seulement (~1 kW), batterie stable
+  for (let m = 0; m <= 10; m++) s.push({ t: m * MIN, preconditioning: true, shiftState: 'P', powerKw: 1, tempMin: 10 });
+  // 11–25 min : la batterie chauffe (moteur arrière, ~7 kW), +0,5 °C/min
+  for (let m = 11; m <= 25; m++) s.push({ t: m * MIN, preconditioning: true, shiftState: 'P', powerKw: 7, tempMin: 10 + (m - 10) * 0.5 });
+  // 26–35 min : cible atteinte, préconditionnement encore actif, ~1 kW
+  for (let m = 26; m <= 35; m++) s.push({ t: m * MIN, preconditioning: true, shiftState: 'P', powerKw: 1, tempMin: 17.5 });
+  const z = heatingZones(s);
+  assert.equal(z.length, 1);
+  assert.ok(z[0].t0 >= 10 * MIN && z[0].t0 <= 11 * MIN, `début ${z[0].t0 / MIN}`);
+  assert.ok(z[0].t1 >= 25 * MIN && z[0].t1 <= 27 * MIN, `fin ${z[0].t1 / MIN}`);
+  // En roulant : pas de critère de puissance, mais la montée de température suffit
+  const d = [];
+  for (let m = 0; m <= 20; m++) d.push({ t: m * MIN, shiftState: 'D', speed: 90, powerKw: 20, tempMin: 5 + m * 0.4 });
+  assert.equal(heatingZones(d).length, 1);
+  // Cabine seulement : rien
+  assert.equal(heatingZones(s.slice(0, 11)).length, 0);
 });

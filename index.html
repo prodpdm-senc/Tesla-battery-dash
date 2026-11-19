@@ -7,7 +7,7 @@
 <meta name="description" content="Température de batterie, préconditionnement et recharge rapide en direct via Tessie.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=19">
+<link rel="stylesheet" href="css/style.css?v=20">
 <script>
   // Script classique (sans module) : s'exécute même sur un navigateur ancien.
   // Affiche les erreurs à l'écran, puisque le navigateur de l'auto n'a pas de console.
@@ -33,7 +33,7 @@
   })();
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
-<script type="module" src="js/app.js?v=19"></script>
+<script type="module" src="js/app.js?v=20"></script>
 </head>
 <body>
 <main class="container">
@@ -105,7 +105,7 @@
           <span class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>Module min</span>
           <span class="legend-item"><span class="swatch" style="background:var(--series-2)"></span>Module max</span>
           <span class="legend-item"><span class="swatch swatch-dash"></span>Cible</span>
-          <span class="legend-item" id="legendPrecond" hidden><span class="swatch swatch-zone"></span>Précond.</span>
+          <span class="legend-item legend-heat" hidden><span class="swatch swatch-zone"></span>Chauffe batt.</span>
         </div>
       </div>
       <div class="seg" role="group" aria-label="Fenêtre de temps" id="rangeSeg">
@@ -124,8 +124,8 @@
         <h2>Moteur arrière</h2>
         <div class="legend">
           <span class="legend-item"><span class="swatch" style="background:var(--series-4)"></span>Stator</span>
-          <span class="legend-item"><span class="swatch" style="background:var(--series-2)"></span>Onduleur</span>
-          <span class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>Dissipateur</span>
+          <span class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>Échangeur de chaleur</span>
+          <span class="legend-item legend-heat" hidden><span class="swatch swatch-zone"></span>Chauffe batt.</span>
         </div>
       </div>
     </div>
@@ -231,11 +231,11 @@
       <input type="text" id="carLink" readonly hidden>
       <p class="muted small" id="carLinkHelp" hidden>Ce lien contient ton token : traite-le comme un mot de passe. Ouvert dans le navigateur de l'auto, il enregistre le token et le VIN, puis s'efface de la barre d'adresse.</p>
       <div class="dlg-section">
-        <h3>Moteur arrière : stator, onduleur, dissipateur</h3>
-        <p class="muted small">Sur une Model 3 LFP, la batterie est surtout chauffée par le moteur arrière. Pour recevoir ces températures, active le <b>Profiler</b> dans Tessie (web) : elles arrivent alors par le flux en direct et s'affichent dans le graphique « Moteur arrière » et la pastille « Moteur arr. ». Le bouton « Activer ces 3 champs » (modification de la configuration de télémétrie) n'est utile que sans le Profiler.</p>
+        <h3>Moteur arrière : stator et échangeur de chaleur</h3>
+        <p class="muted small">Sur une Model 3 LFP, la batterie est surtout chauffée par le moteur arrière. Pour recevoir ces températures, active le <b>Profiler</b> dans Tessie (web) : elles arrivent alors par le flux en direct et s'affichent dans le graphique « Moteur arrière » et la pastille « Moteur arr. ». Le bouton « Activer ces 2 champs » (modification de la configuration de télémétrie) n'est utile que sans le Profiler.</p>
         <div class="row-btns">
           <button class="btn" type="button" id="btnTelCheck">Vérifier</button>
-          <button class="btn" type="button" id="btnTelEnable">Activer ces 3 champs</button>
+          <button class="btn" type="button" id="btnTelEnable">Activer ces 2 champs</button>
           <button class="btn" type="button" id="btnTelStream">Tester le flux (60 s)</button>
         </div>
         <pre class="hist-report" id="telReport" hidden></pre>

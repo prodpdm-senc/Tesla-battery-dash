@@ -94,7 +94,6 @@ export class Simulator {
       preconditioning: precond,
       outsideTemp: this.ambient,
       statorTemp: Math.round(this.S * 10) / 10,
-      inverterTemp: Math.round((this.S * 0.55 + 10) * 10) / 10,
       heatsinkTemp: Math.round(((this.S + this.T) / 2) * 10) / 10,
       minutesToFull: null,
       chargeLimit: 80,
