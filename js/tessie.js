@@ -1,7 +1,7 @@
 // Client Tessie minimal + normalisation des données en un « échantillon » plat.
 // Docs : https://developer.tessie.com
 
-import { pickStatorTemp } from './telemetry.js?v=21';
+import { pickStatorTemp } from './telemetry.js?v=22';
 
 export class ApiError extends Error {
   constructor(message, { status = 0, kind = 'http' } = {}) {

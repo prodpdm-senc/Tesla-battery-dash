@@ -116,7 +116,8 @@ function writeStore(s) {
 
 // ───────────────────────── DOM ─────────────────────────
 
-const GAUGE_MIN_W = 135;   // largeur minimale d'une jauge (px) → nombre de jauges par rangée
+const GAUGE_MIN_W_TIGHT = 62; // largeur minimale quand la hauteur manque
+const ROW_MIN_H = 110;     // hauteur sous laquelle une rangée de jauges est trop écrasée
 const SVG_GRIP = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><g fill="currentColor"><circle cx="8" cy="6" r="2"/><circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="18" r="2"/><circle cx="16" cy="18" r="2"/></g></svg>';
 const SVG_HIDE = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
 
@@ -142,11 +143,15 @@ export class LayoutManager {
     this.indicator.className = 'drop-indicator';
     this.indicator.hidden = true;
     document.body.appendChild(this.indicator);
-    this.lastN = [0, 0];
     let raf = 0;
+    let lastSize = '';
     const onResize = () => {
       cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => { if (this._perRow().join() !== this.lastN.join()) this.apply(); else this._sizeClasses(); });
+      raf = requestAnimationFrame(() => {
+        // La largeur ET la hauteur comptent : moins de hauteur → plus de jauges par rangée.
+        const size = `${root.clientWidth}x${root.clientHeight}`;
+        if (size !== lastSize) { lastSize = size; this.apply(); }
+      });
     };
     if (typeof ResizeObserver !== 'undefined') new ResizeObserver(onResize).observe(root);
     window.addEventListener('resize', onResize);
@@ -193,9 +198,15 @@ export class LayoutManager {
     writeStore(s);
   }
 
-  /** Nombre maximal de jauges par rangée dans chaque colonne (selon sa largeur). */
+  /**
+   * Nombre de jauges par rangée dans chaque colonne, comme les cases de la V20 :
+   * 2 par rangée, 3 quand la colonne fait au moins 320 px, jamais plus de 3.
+   */
   _perRow() {
-    return this.colEls.map((c) => Math.max(1, Math.min(6, Math.floor((c.clientWidth || 300) / GAUGE_MIN_W))));
+    return this.colEls.map((c) => {
+      const w = c.clientWidth || 300;
+      return w >= 320 ? 3 : w >= 200 ? 2 : 1;
+    });
   }
 
   _applySplit() {
@@ -214,26 +225,44 @@ export class LayoutManager {
   apply() {
     const l = this.layout;
     this._applySplit();
-    const per = this.lastN = this._perRow();
-    l.cols.forEach((ids, ci) => {
-      const col = this.colEls[ci];
-      const rows = packRows(ids, per[ci]);
-      const frag = document.createDocumentFragment();
-      for (const r of rows) {
-        if (!r.gauges) { frag.appendChild(this.blocks[r.ids[0]]); continue; }
-        const row = document.createElement('div');
-        row.className = 'g-row';
-        row.style.gridTemplateColumns = `repeat(${r.n}, minmax(0, 1fr))`;
-        for (const id of r.ids) row.appendChild(this.blocks[id]);
-        frag.appendChild(row);
-      }
-      col.textContent = '';
-      col.appendChild(frag);
-      col.classList.toggle('lcol-empty', !ids.length);
-    });
+    const per = this._perRow();
     for (const id of l.hidden) this.pool.appendChild(this.blocks[id]);
+    l.cols.forEach((ids, ci) => {
+      this._buildCol(ci, ids, per[ci]);
+      // Rangées trop basses pour la fenêtre : plus de jauges par rangée (donc moins de rangées).
+      const gauges = ids.filter(isGauge).length;
+      // … mais jamais plus étroites que GAUGE_MIN_W_TIGHT : au-delà, le mode compact prend le relais.
+      const cap = Math.min(6, gauges, Math.max(per[ci], Math.floor((this.colEls[ci].clientWidth || 300) / GAUGE_MIN_W_TIGHT)));
+      for (let n = per[ci]; n < cap && this._minRowH(ci) < ROW_MIN_H; ) {
+        n++;
+        this._buildCol(ci, ids, n);
+      }
+    });
     this._sizeClasses();
     this.onChange();
+  }
+
+  _buildCol(ci, ids, perRow) {
+    const col = this.colEls[ci];
+    const frag = document.createDocumentFragment();
+    for (const r of packRows(ids, perRow)) {
+      if (!r.gauges) { frag.appendChild(this.blocks[r.ids[0]]); continue; }
+      const row = document.createElement('div');
+      row.className = 'g-row';
+      row.style.gridTemplateColumns = `repeat(${r.n}, minmax(0, 1fr))`;
+      for (const id of r.ids) row.appendChild(this.blocks[id]);
+      frag.appendChild(row);
+    }
+    col.textContent = '';
+    col.appendChild(frag);
+    col.classList.toggle('lcol-empty', !ids.length);
+  }
+
+  /** Hauteur de la plus basse rangée de jauges d'une colonne (Infinity s'il n'y en a pas). */
+  _minRowH(ci) {
+    let h = Infinity;
+    for (const r of this.colEls[ci].querySelectorAll('.g-row')) h = Math.min(h, r.clientHeight);
+    return h;
   }
 
   /** Classes selon la taille réelle des cartes (résumé large, pastilles, grandes jauges). */
@@ -245,7 +274,10 @@ export class LayoutManager {
       this.blocks.chips.dataset.size = cw >= 640 ? 'row' : cw >= 380 ? 'grid' : 'list';
     }
     for (const row of this.root.querySelectorAll('.g-row')) {
-      row.classList.toggle('g-big', row.clientHeight >= 230 && row.clientWidth / Math.max(1, row.children.length) >= 170);
+      const h = row.clientHeight, w = row.clientWidth / Math.max(1, row.children.length);
+      row.classList.toggle('g-big', h >= 230 && w >= 170);
+      // Dernier recours (fenêtre très basse) : jauges compactes, jamais superposées.
+      row.classList.toggle('g-compact', h < ROW_MIN_H);
     }
   }
 
