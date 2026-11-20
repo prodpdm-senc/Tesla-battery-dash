@@ -116,7 +116,6 @@ function writeStore(s) {
 
 // ───────────────────────── DOM ─────────────────────────
 
-const GAUGE_MIN_W = 100;   // largeur minimale d'une jauge (px) → nombre de jauges par rangée
 const GAUGE_MIN_W_TIGHT = 62; // largeur minimale quand la hauteur manque
 const ROW_MIN_H = 110;     // hauteur sous laquelle une rangée de jauges est trop écrasée
 const SVG_GRIP = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><g fill="currentColor"><circle cx="8" cy="6" r="2"/><circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="18" r="2"/><circle cx="16" cy="18" r="2"/></g></svg>';
@@ -199,9 +198,15 @@ export class LayoutManager {
     writeStore(s);
   }
 
-  /** Nombre maximal de jauges par rangée dans chaque colonne (selon sa largeur). */
+  /**
+   * Nombre de jauges par rangée dans chaque colonne, comme les cases de la V20 :
+   * 2 par rangée, 3 quand la colonne fait au moins 320 px, jamais plus de 3.
+   */
   _perRow() {
-    return this.colEls.map((c) => Math.max(1, Math.min(6, Math.floor((c.clientWidth || 300) / GAUGE_MIN_W))));
+    return this.colEls.map((c) => {
+      const w = c.clientWidth || 300;
+      return w >= 320 ? 3 : w >= 200 ? 2 : 1;
+    });
   }
 
   _applySplit() {
