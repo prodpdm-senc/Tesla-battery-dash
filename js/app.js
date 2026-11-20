@@ -1,19 +1,20 @@
-import { TessieClient, ApiError } from './tessie.js?v=20';
-import { Simulator } from './simulator.js?v=20';
-import { estimate, pickTemp, formatDuration } from './estimator.js?v=20';
-import { settings as settingsStore, history, observations, appendSample } from './store.js?v=20';
-import { createCharts } from './charts.js?v=20';
-import { Gauges } from './gauges.js?v=20';
-import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=20';
-import { DRIVE_FIELDS, configuredFields, withStatorField, findDriveValues, streamProbe, configFlags, LiveStream, attachMotor, applyPatch } from './telemetry.js?v=20';
-import { SessionsView, demoHistory } from './sessionsView.js?v=20';
-import { detectHeatingEnd } from './events.js?v=20';
-import { cleanSample, FieldClock, heatingZones, isActive, streamSilent, heatingPowerKw, isNight } from './quality.js?v=20';
+import { TessieClient, ApiError } from './tessie.js?v=21';
+import { Simulator } from './simulator.js?v=21';
+import { estimate, pickTemp, formatDuration } from './estimator.js?v=21';
+import { settings as settingsStore, history, observations, appendSample } from './store.js?v=21';
+import { createCharts } from './charts.js?v=21';
+import { Gauges } from './gauges.js?v=21';
+import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=21';
+import { DRIVE_FIELDS, configuredFields, withStatorField, findDriveValues, streamProbe, configFlags, LiveStream, attachMotor, applyPatch } from './telemetry.js?v=21';
+import { SessionsView, demoHistory } from './sessionsView.js?v=21';
+import { LayoutManager, BLOCKS } from './layout.js?v=21';
+import { detectHeatingEnd } from './events.js?v=21';
+import { cleanSample, FieldClock, heatingZones, isActive, streamSilent, heatingPowerKw, isNight } from './quality.js?v=21';
 
 // Version de l'app. Le même numéro est ajouté à l'adresse de chaque fichier (?v=…)
 // pour forcer les navigateurs (Chrome iPhone, auto) à charger la nouvelle version.
 // À augmenter à chaque mise en ligne ; test/version.test.mjs vérifie la cohérence.
-export const APP_VERSION = '20';
+export const APP_VERSION = '21';
 
 const DEFAULTS = {
   vin: '',
@@ -70,6 +71,7 @@ const state = {
 
 let charts;
 let sessions;
+let layout;
 
 // ───────────────────────── Démarrage ─────────────────────────
 
@@ -80,6 +82,9 @@ function init() {
   importSetupFromHash();
   charts = createCharts({ tempEl: $('chartTemp'), motorEl: $('chartMotor') });
   buildGauges();
+  // Après buildGauges : les jauges doivent exister pour être placées.
+  layout = new LayoutManager({ root: $('layout'), colA: $('colA'), colB: $('colB'), pool: $('blockPool'), onChange: syncLayoutUi });
+  layout.apply();
   sessions = new SessionsView({
     fetchStates: (q) => {
       if (!state.s.token || !state.s.vin) return Promise.reject(new Error('token ou VIN manquant (Réglages)'));
@@ -279,6 +284,7 @@ function buildSetupLink(token, vin, target) {
 /** Affiche la vue Direct ou Sessions. */
 function applyView() {
   const v = state.s.view === 'sessions' ? 'sessions' : 'live';
+  if (v === 'sessions' && layout && layout.editing) layout.setEditing(false);
   document.documentElement.classList.toggle('view-sessions', v === 'sessions');
   $('viewSessions').hidden = v !== 'sessions';
   for (const b of $('viewSeg').querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.view === v));
@@ -570,7 +576,7 @@ let gauges;
 function buildGauges() {
   $('chips').innerHTML = CHIPS.map((c) => `
     <div class="chip" id="chip-${c.id}"><span class="chip-label">${c.label}</span><span class="chip-val" id="chip-${c.id}-val">—</span></div>`).join('');
-  gauges = new Gauges($('gauges'), GAUGES);
+  gauges = new Gauges($('blockPool'), GAUGES);
 }
 
 function renderGauges(s) {
@@ -683,6 +689,19 @@ function bindUi() {
   $('btnSettings').addEventListener('click', () => openSettings());
   $('btnTarget').addEventListener('click', () => openSettings(null, 'target'));
   $('btnRefresh').addEventListener('click', () => poll());
+  // Disposition : choix (un tap), mode édition, largeur des colonnes, cartes masquées.
+  $('layoutSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (b) layout.setActive(b.dataset.layout);
+  });
+  $('btnEdit').addEventListener('click', () => layout.setEditing(!layout.editing));
+  $('btnEditDone').addEventListener('click', () => layout.setEditing(false));
+  $('btnLayoutReset').addEventListener('click', () => layout.reset());
+  $('splitRange').addEventListener('input', (e) => layout.setSplit(+e.target.value));
+  $('hiddenList').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-show]');
+    if (b) layout.showBlock(b.dataset.show);
+  });
   $('viewSeg').addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (!b) return;
@@ -755,6 +774,16 @@ function bindUi() {
     if (!state.sim) { state.samples = []; render(true); }
     formMsg('Historique effacé.');
   });
+}
+
+/** Sélecteur de disposition, barre d'édition et cartes masquées. */
+function syncLayoutUi() {
+  for (const b of $('layoutSeg').querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.layout === layout.active));
+  $('btnEdit').setAttribute('aria-pressed', String(layout.editing));
+  $('editBar').hidden = !layout.editing;
+  $('splitRange').value = layout.layout.split;
+  $('hiddenList').innerHTML = layout.layout.hidden.map((id) =>
+    `<button class="btn btn-add" type="button" data-show="${id}">+ ${escapeHtml(BLOCKS[id])}</button>`).join('');
 }
 
 function syncRangeButtons() {
