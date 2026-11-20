@@ -3,7 +3,7 @@
 // du zéro, vers le haut si positif, vers le bas si négatif.
 // Une valeur trop vieille est atténuée et son âge remplace le texte du dessous.
 
-import { formatAge } from './quality.js?v=20';
+import { formatAge } from './quality.js?v=21';
 
 function clamp01(t) { return Math.max(0, Math.min(1, t)); }
 
@@ -32,6 +32,7 @@ export class Gauges {
 
   _build(root, d) {
     const box = div('gauge', root);
+    box.dataset.block = `g-${d.id}`; // carte déplaçable (js/layout.js)
     box.setAttribute('role', 'meter');
     box.setAttribute('aria-label', d.label);
     box.setAttribute('aria-valuemin', String(d.min));

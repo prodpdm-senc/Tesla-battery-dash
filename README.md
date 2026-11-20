@@ -59,6 +59,13 @@ En mode Direct, le dashboard reste connecté au flux en direct de Tessie (`wss:/
 - **ETA incertaine** (moins de 3 min de données, R² < 0,5, plage infinie ou plus large que 60 % de l'ETA) : affichée « ≈ 25 min » sans heure précise.
 - **Écran allumé** (Wake Lock) pendant une chauffe, un préconditionnement ou une recharge, si le navigateur le permet.
 
+## Disposition configurable
+
+- **Deux dispositions**, un tap pour passer de l'une à l'autre (en-tête) : **Graphiques** (grands graphiques à gauche, jauges à droite) et **Tableau de bord** (grandes jauges à gauche, résumé et graphiques à droite).
+- **Mode édition** (bouton crayon) : chaque carte affiche une poignée (glisser au doigt, dans sa colonne ou vers l'autre) et un bouton pour la masquer. Cartes : résumé, graphique batterie, graphique moteur, pastilles, et chaque jauge (tension, courant, puissance, charge, chargeur, extérieur). La barre d'édition règle la largeur de la colonne de gauche, réaffiche les cartes masquées (« + Chargeur ») et réinitialise la disposition. Hors du mode édition, rien ne bouge.
+- Les jauges voisines se partagent des rangées équilibrées selon la largeur de leur colonne ; en grand, elles grossissent (chiffres lisibles d'un coup d'œil). Tout tient toujours dans la fenêtre.
+- Chaque disposition est enregistrée sur l'appareil (celle de l'auto ne change pas celle du téléphone). Sur téléphone, les deux colonnes s'empilent.
+
 ## Affichage
 
 - **Bande de chauffe de la batterie** (teinte bleue) sur les deux graphiques, et repère « fin de chauffe ». La bande suit la chauffe de la batterie, pas le préconditionnement : drapeau du chauffage, ou auto stationnée en préconditionnement qui tire au moins 3 kW (la cabine seule tire ~1 kW), ou montée du module le plus froid d'au moins 0,25 °C/min hors recharge (couvre la chauffe en roulant et l'historique de Tessie).
@@ -164,6 +171,7 @@ js/events.js        détection des fins de chauffe (pur, testé)
 js/sessions.js      détection des chauffes et des recharges dans l'historique (pur, testé)
 js/sessionsView.js  page Sessions (listes et graphiques)
 js/telemetry.js     télémétrie du moteur arrière : configuration, lecture, flux (testé)
+js/layout.js        disposition configurable : modèle (pur, testé), glisser-déposer tactile
 js/quality.js       valeurs aberrantes, trous, âge des valeurs, flux muet, thème (pur, testé)
 js/simulator.js     mode démo
 js/store.js         stockage local (réglages, historique)
