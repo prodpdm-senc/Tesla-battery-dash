@@ -8,7 +8,7 @@
 //  - heatingPowerKw : puissance consommée par la chauffe, auto stationnée.
 //  - sunTimes / isNight : thème sombre selon le coucher du soleil.
 
-import { detectHeatingSessions } from './sessions.js?v=21';
+import { detectHeatingSessions } from './sessions.js?v=22';
 
 const MIN = 60000;
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);

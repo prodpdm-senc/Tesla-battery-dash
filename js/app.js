@@ -1,20 +1,20 @@
-import { TessieClient, ApiError } from './tessie.js?v=21';
-import { Simulator } from './simulator.js?v=21';
-import { estimate, pickTemp, formatDuration } from './estimator.js?v=21';
-import { settings as settingsStore, history, observations, appendSample } from './store.js?v=21';
-import { createCharts } from './charts.js?v=21';
-import { Gauges } from './gauges.js?v=21';
-import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=21';
-import { DRIVE_FIELDS, configuredFields, withStatorField, findDriveValues, streamProbe, configFlags, LiveStream, attachMotor, applyPatch } from './telemetry.js?v=21';
-import { SessionsView, demoHistory } from './sessionsView.js?v=21';
-import { LayoutManager, BLOCKS } from './layout.js?v=21';
-import { detectHeatingEnd } from './events.js?v=21';
-import { cleanSample, FieldClock, heatingZones, isActive, streamSilent, heatingPowerKw, isNight } from './quality.js?v=21';
+import { TessieClient, ApiError } from './tessie.js?v=22';
+import { Simulator } from './simulator.js?v=22';
+import { estimate, pickTemp, formatDuration } from './estimator.js?v=22';
+import { settings as settingsStore, history, observations, appendSample } from './store.js?v=22';
+import { createCharts } from './charts.js?v=22';
+import { Gauges } from './gauges.js?v=22';
+import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=22';
+import { DRIVE_FIELDS, configuredFields, withStatorField, findDriveValues, streamProbe, configFlags, LiveStream, attachMotor, applyPatch } from './telemetry.js?v=22';
+import { SessionsView, demoHistory } from './sessionsView.js?v=22';
+import { LayoutManager, BLOCKS } from './layout.js?v=22';
+import { detectHeatingEnd } from './events.js?v=22';
+import { cleanSample, FieldClock, heatingZones, isActive, streamSilent, heatingPowerKw, isNight } from './quality.js?v=22';
 
 // Version de l'app. Le même numéro est ajouté à l'adresse de chaque fichier (?v=…)
 // pour forcer les navigateurs (Chrome iPhone, auto) à charger la nouvelle version.
 // À augmenter à chaque mise en ligne ; test/version.test.mjs vérifie la cohérence.
-export const APP_VERSION = '21';
+export const APP_VERSION = '22';
 
 const DEFAULTS = {
   vin: '',

@@ -335,6 +335,12 @@ dialog details summary { cursor: pointer; font-size: 12px; font-weight: 500; col
 .g-big .gauge-body { grid-template-columns: 1fr 28px 1fr; }
 .g-big .gauge-track { border-radius: 14px; }
 .g-big .gauge-fill { border-radius: 12px; }
+/* Rangée trop basse : sans échelle ni texte du dessous, chiffre plus petit ; rien ne déborde */
+.g-row .gauge { overflow: hidden; }
+.g-compact .gauge { padding: 4px 4px 3px; }
+.g-compact .gauge-scale, .g-compact .gauge-sub { display: none; }
+.g-compact .gauge-body { grid-template-columns: 1fr 12px 1fr; margin: 3px 0; min-height: 12px; }
+.g-compact .gauge-value { font-size: 15px; }
 
 /* ≥ 600 px (navigateur de l'auto, plein écran ou non, ordinateur, tablette) :
    la page remplit exactement la fenêtre, sans défiler ; les cartes se partagent la hauteur. */
@@ -364,7 +370,7 @@ dialog details summary { cursor: pointer; font-size: 12px; font-weight: 500; col
   .card-head { flex: none; flex-wrap: nowrap; margin-bottom: 2px; }
   .card-head > * { margin-top: 0; }
   /* Graphiques : deux fois la part d'une rangée de jauges ; température un peu plus haute */
-  .lcol > .card { flex: 2 1 0; }
+  .lcol > .card { flex: 2 1 0; overflow: hidden; }   /* fenêtre très basse : rien ne déborde sur la carte suivante */
   .lcol > #cardTemp { flex: 2.5 1 0; }
   .lcol > .g-row { flex: 1 1 0; min-height: 0; }
   .gauge { display: flex; flex-direction: column; min-height: 0; }
