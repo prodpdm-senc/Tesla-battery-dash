@@ -2,7 +2,7 @@
 // Module pur (aucun DOM), testé. Entrée : échantillons triés (history.statesToSamples).
 // Convention : powerKw positif = énergie qui sort de la batterie.
 
-import { linearFit } from './estimator.js?v=24';
+import { linearFit } from './estimator.js?v=25';
 
 const MIN = 60000;
 
