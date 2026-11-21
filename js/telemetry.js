@@ -54,7 +54,8 @@ export function withStatorField(json, fields = DRIVE_FIELDS, interval = STATOR_I
 
 /**
  * Cadence totale demandée par une configuration : somme de 1 / intervalle sur tous les champs
- * (signaux par seconde). Tessie limite une configuration personnalisée à 1 signal/s au total.
+ * (signaux par seconde). Information seulement : la limite de Tessie (1 signal/s) s'applique
+ * à chaque champ — sa propre configuration compte ~49 champs à 1 s.
  * Un champ sans intervalle lisible est compté à part (noInterval).
  */
 export const TESSIE_MAX_RATE = 1;
