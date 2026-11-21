@@ -1,20 +1,20 @@
-import { TessieClient, ApiError } from './tessie.js?v=22';
-import { Simulator } from './simulator.js?v=22';
-import { estimate, pickTemp, formatDuration } from './estimator.js?v=22';
-import { settings as settingsStore, history, observations, appendSample } from './store.js?v=22';
-import { createCharts } from './charts.js?v=22';
-import { Gauges } from './gauges.js?v=22';
-import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=22';
-import { DRIVE_FIELDS, configuredFields, withStatorField, findDriveValues, streamProbe, configFlags, LiveStream, attachMotor, applyPatch } from './telemetry.js?v=22';
-import { SessionsView, demoHistory } from './sessionsView.js?v=22';
-import { LayoutManager, BLOCKS } from './layout.js?v=22';
-import { detectHeatingEnd } from './events.js?v=22';
-import { cleanSample, FieldClock, heatingZones, isActive, streamSilent, heatingPowerKw, isNight } from './quality.js?v=22';
+import { TessieClient, ApiError } from './tessie.js?v=23';
+import { Simulator } from './simulator.js?v=23';
+import { estimate, pickTemp, formatDuration } from './estimator.js?v=23';
+import { settings as settingsStore, history, observations, appendSample } from './store.js?v=23';
+import { createCharts } from './charts.js?v=23';
+import { Gauges } from './gauges.js?v=23';
+import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=23';
+import { DRIVE_FIELDS, configuredFields, withStatorField, driveFieldsStatus, findDriveValues, streamProbe, configFlags, LiveStream, attachMotor, applyPatch } from './telemetry.js?v=23';
+import { SessionsView, demoHistory } from './sessionsView.js?v=23';
+import { LayoutManager, BLOCKS } from './layout.js?v=23';
+import { detectHeatingEnd } from './events.js?v=23';
+import { cleanSample, FieldClock, heatingZones, isActive, streamSilent, heatingPowerKw, isNight, autoWindowStart } from './quality.js?v=23';
 
 // Version de l'app. Le même numéro est ajouté à l'adresse de chaque fichier (?v=…)
 // pour forcer les navigateurs (Chrome iPhone, auto) à charger la nouvelle version.
 // À augmenter à chaque mise en ligne ; test/version.test.mjs vérifie la cohérence.
-export const APP_VERSION = '22';
+export const APP_VERSION = '23';
 
 const DEFAULTS = {
   vin: '',
@@ -25,6 +25,9 @@ const DEFAULTS = {
   windowMin: 5,
   rememberToken: false,
   rangeMin: 60,
+  ranges: {},          // fenêtre de temps par disposition : minutes ou 'auto' (défaut : Auto en Tableau de bord)
+  telInterval: 30,     // s, cadence demandée pour les champs du moteur (télémétrie de l'auto)
+  telFields: false,    // champs du moteur ajoutés par ce dashboard : on vérifie qu'ils restent
   demo: false,
   view: 'live',        // 'live' | 'sessions'
   theme: 'system',     // 'system' | 'sun' (selon le soleil) | 'dark' | 'light'
@@ -96,7 +99,9 @@ function init() {
   });
   bindUi();
   syncRangeButtons();
-  if (state.s.demo) startDemo();
+  // Plus de bouton Démo : le mode démo ne s'ouvre qu'avec l'adresse ?demo (essais de la page),
+  // et un ancien réglage « démo » enregistré est ignoré.
+  if (/[?&]demo\b/.test(location.search)) startDemo();
   else startLive();
   applyView();
 }
@@ -108,11 +113,10 @@ function client() {
 function startLive() {
   stop();
   state.sim = null;
-  $('btnDemo').setAttribute('aria-pressed', 'false');
   if (!state.s.token || !state.s.vin) {
     state.samples = [];
     setStatus('idle', 'Non configuré');
-    banner('info', 'Entre ton token Tessie et ton VIN dans <b>Réglages</b>, ou clique sur <b>Démo</b> pour voir le dashboard avec des données simulées.');
+    banner('info', 'Entre ton token Tessie et ton VIN dans <b>Réglages</b>.');
     render(true);
     return;
   }
@@ -126,6 +130,7 @@ function startLive() {
   poll();
   backfill();
   startStream();
+  state.telTimer = setTimeout(watchTelemetryFields, 20000);
   if (state.s.view === 'sessions') sessions.show(`live:${state.s.vin}`);
 }
 
@@ -135,7 +140,6 @@ function startDemo() {
   state.samples = state.sim.history();
   state.obs = [];
   state.fields.reset();
-  $('btnDemo').setAttribute('aria-pressed', 'true');
   banner('info', 'Mode démo : préconditionnement simulé d’un pack LFP par −5 °C. Aucune donnée réelle.');
   render(true);
   poll();
@@ -144,6 +148,7 @@ function startDemo() {
 
 function stop() {
   clearTimeout(state.timer);
+  clearTimeout(state.telTimer);
   state.timer = null;
   state.gen++;
   if (state.stream) { state.stream.stop(); state.stream = null; }
@@ -299,7 +304,8 @@ function applyView() {
 async function backfill() {
   const gen = state.gen;
   const now = Math.floor(Date.now() / 1000);
-  const hours = Math.min(12, Math.max(1, Math.ceil(state.s.rangeMin / 60)));
+  const r = currentRange();
+  const hours = r === 'auto' ? 4 : Math.min(12, Math.max(1, Math.ceil(r / 60)));
   try {
     const json = await new TessieClient({ token: state.s.token, baseUrl: state.s.baseUrl || DEFAULTS.baseUrl, timeoutMs: 30000 })
       .states(state.s.vin, `from=${now - hours * 3600}&to=${now}&interval=1`);
@@ -536,6 +542,10 @@ function metricLabel() {
 // remplit la barre au maximum et s'affiche quand même en texte.
 // keys : champs dont dépend la jauge (pour l'âge de la valeur affichée).
 const GAUGES = [
+  // Module le plus froid (limite la recharge) ; le trait marque la cible : la barre monte vers lui.
+  { id: 'battery', label: 'Batterie', unit: '°C', min: -20, max: 60, decimals: 1, get: (s) => s.tempMin,
+    marker: () => +state.s.target, keys: ['tempMin'],
+    sub: (s) => (s.tempMax != null ? `max ${fmt(s.tempMax)} °C` : '') },
   { id: 'voltage', label: 'Tension', unit: 'V', min: 280, max: 420, get: (s) => s.voltage, keys: ['voltage'] },
   { id: 'current', label: 'Courant', unit: 'A', min: -500, max: 500, signed: true, get: (s) => s.current, keys: ['current'],
     sub: () => '+ décharge' },
@@ -591,9 +601,20 @@ function renderGauges(s) {
   }
 }
 
+/** Fenêtre de temps de la disposition active : minutes, ou 'auto' (début du trajet → maintenant). */
+function currentRange() {
+  const key = layout ? layout.active : 'graphs';
+  const r = (state.s.ranges || {})[key];
+  if (r === 'auto' || Number.isFinite(r)) return r;
+  return key === 'dash' ? 'auto' : state.s.rangeMin;
+}
+
 function renderCharts(est, last) {
-  const rangeMs = state.s.rangeMin * 60000;
   const now = Math.max(Date.now(), last ? last.t : 0);
+  const range = currentRange();
+  // Auto : le graphique commence au début du trajet (après la dernière période où l'auto
+  // dormait) et s'étire à mesure qu'on roule ; 10 min au départ, 12 h au plus.
+  const rangeMs = range === 'auto' ? now - autoWindowStart(state.samples, now) : range * 60000;
   const target = +state.s.target;
   let projection = null;
   let future = 0;
@@ -692,7 +713,10 @@ function bindUi() {
   // Disposition : choix (un tap), mode édition, largeur des colonnes, cartes masquées.
   $('layoutSeg').addEventListener('click', (e) => {
     const b = e.target.closest('button');
-    if (b) layout.setActive(b.dataset.layout);
+    if (!b) return;
+    layout.setActive(b.dataset.layout);
+    syncRangeButtons(); // chaque disposition garde sa fenêtre de temps
+    render(true);
   });
   $('btnEdit').addEventListener('click', () => layout.setEditing(!layout.editing));
   $('btnEditDone').addEventListener('click', () => layout.setEditing(false));
@@ -709,17 +733,14 @@ function bindUi() {
     settingsStore.save(state.s);
     applyView();
   });
-  $('btnDemo').addEventListener('click', () => {
-    state.s.demo = !state.sim;
-    settingsStore.save(state.s);
-    state.errors = 0;
-    if (state.s.demo) startDemo(); else startLive();
-  });
   $('rangeSeg').addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     const m = btn && btn.dataset.min;
     if (!m) return;
-    state.s.rangeMin = +m;
+    const v = m === 'auto' ? 'auto' : +m;
+    state.s.ranges = Object.assign({}, state.s.ranges);
+    state.s.ranges[layout.active] = v;
+    if (v !== 'auto') state.s.rangeMin = v;
     settingsStore.save(state.s);
     syncRangeButtons();
     render(true);
@@ -787,9 +808,8 @@ function syncLayoutUi() {
 }
 
 function syncRangeButtons() {
-  for (const b of $('rangeSeg').querySelectorAll('button')) {
-    b.setAttribute('aria-pressed', String(+b.dataset.min === +state.s.rangeMin));
-  }
+  const r = String(currentRange());
+  for (const b of $('rangeSeg').querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.min === r));
 }
 
 function openSettings(message, focus) {
@@ -803,6 +823,7 @@ function openSettings(message, focus) {
   f.interval.value = state.s.interval;
   f.metric.value = state.s.metric;
   f.windowMin.value = state.s.windowMin;
+  $('telInterval').value = String(state.s.telInterval || 30);
   f.theme.value = state.s.theme || 'system';
   f.baseUrl.value = state.s.baseUrl;
   $('vinList').hidden = true;
@@ -953,13 +974,18 @@ async function telEnable() {
   const ctx = telContext();
   if (!ctx) return;
   const { c, vin } = ctx;
-  if (!window.confirm(`Ajouter ${DRIVE_FIELDS.join(', ')} (1 point / min) à la télémétrie de l’auto ?\nLes autres champs et réglages ne sont pas modifiés.`)) return;
+  const interval = Math.max(1, Number($('telInterval').value) || 30);
+  if (!window.confirm(`Ajouter ${DRIVE_FIELDS.join(', ')} à la télémétrie de l’auto, un point aux ${interval} s au plus ?\n`
+    + 'Les autres champs et réglages ne sont pas modifiés. Les températures du moteur arriveront alors sans le Profiler.')) return;
   telOut('Lecture de la configuration actuelle…');
   try {
     const cfg = await c.telemetryConfig(vin);
-    const have = configuredFields(cfg);
-    if (DRIVE_FIELDS.every((fld) => have.includes(fld))) { telOut(`${DRIVE_FIELDS.join(', ')} : déjà configurés. Rien envoyé.`); return; }
-    const body = withStatorField(cfg);
+    if (driveFieldsStatus(cfg, interval).ok) {
+      telOut(`${DRIVE_FIELDS.join(', ')} : déjà configurés aux ${interval} s. Rien envoyé.`);
+      state.s.telFields = true; state.s.telInterval = interval; settingsStore.save(state.s);
+      return;
+    }
+    const body = withStatorField(cfg, DRIVE_FIELDS, interval, { force: true });
     if (!body) {
       telOut(`Configuration actuelle illisible ou vide : rien envoyé, pour ne pas remplacer celle de Tessie.\nStructure reçue : ${shape(cfg, 3)}`);
       return;
@@ -969,11 +995,44 @@ async function telEnable() {
       return;
     }
     const res = await c.setTelemetryConfig(vin, body);
-    telOut(`Envoyé : { fields } avec ${Object.keys(body.fields).length} champs (les ${configuredFields(cfg).length} actuels + ${DRIVE_FIELDS.join(', ')}).\nRéponse : ${shape(res, 3)}\n`
-      + 'L’auto applique la nouvelle configuration à son prochain réveil. Clique sur « Vérifier » dans quelques minutes.');
+    state.s.telFields = true; state.s.telInterval = interval; settingsStore.save(state.s);
+    telOut(`Envoyé : { fields } avec ${Object.keys(body.fields).length} champs (les ${configuredFields(cfg).length} actuels + ${DRIVE_FIELDS.join(', ')} aux ${interval} s).\n`
+      + `Réponse : ${shape(res, 3)}\nVérification dans 5 s…`);
+    // Relecture : Tessie a-t-elle gardé les champs et l'intervalle ?
+    await new Promise((ok) => setTimeout(ok, 5000));
+    const after = await c.telemetryConfig(vin);
+    const st = driveFieldsStatus(after, interval);
+    const flags = configFlags(after);
+    telOut(`${$('telReport').textContent}\n`
+      + (st.ok ? `Relu : les champs sont dans la configuration, aux ${interval} s.` : st.missing.length
+        ? `Relu : ${st.missing.join(', ')} ABSENT(S) de la configuration. Tessie ne les a pas gardés.`
+        : `Relu : présents, mais avec un autre intervalle que ${interval} s (${st.otherInterval.join(', ')}) : Tessie ou l’auto l’a ajusté.`)
+      + `\nsynced = ${flags.synced} (l’auto applique la configuration à son prochain réveil ; « Vérifier » dans quelques minutes).`
+      + '\nTest : arrête le Profiler, verrouille le téléphone, et regarde si le graphique « Moteur arrière » continue.');
   } catch (e) {
     telOut(`Échec : ${e.message}`);
   }
+}
+
+/**
+ * Champs du moteur ajoutés par ce dashboard : vérifie (au démarrage, puis toutes les 30 min)
+ * qu'ils sont encore dans la configuration de l'auto. Tessie gère cette configuration et
+ * pourrait la remplacer (ex. le Profiler) : on le signale plutôt que de le découvrir en roulant.
+ */
+async function watchTelemetryFields() {
+  clearTimeout(state.telTimer);
+  if (state.sim || !state.s.telFields || !state.s.token || !state.s.vin) return;
+  const gen = state.gen;
+  try {
+    const cfg = await client().telemetryConfig(state.s.vin);
+    if (gen !== state.gen) return;
+    const st = driveFieldsStatus(cfg);
+    if (st.missing.length) {
+      banner('error', `Les températures du moteur (${st.missing.map(escapeHtml).join(', ')}) ont été retirées de la télémétrie de l’auto, probablement par Tessie. `
+        + 'Réglages → Avancé → « Activer ces 2 champs » pour les remettre.');
+    }
+  } catch (e) { /* vérification facultative : on réessaiera */ }
+  if (gen === state.gen) state.telTimer = setTimeout(watchTelemetryFields, 30 * 60000);
 }
 
 /** Écoute le flux en direct de Tessie 60 s et rapporte les champs reçus. */
