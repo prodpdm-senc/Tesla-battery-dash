@@ -170,3 +170,21 @@ test('driveFieldsStatus : absents, autre intervalle, ok', () => {
   assert.deepEqual(driveFieldsStatus(both, 30).otherInterval, ['DiHeatsinkTR']);
   assert.equal(driveFieldsStatus({}).missing.length, 2);
 });
+
+import { signalRate } from '../js/telemetry.js';
+import { errorDetail } from '../js/tessie.js';
+
+test('signalRate : somme de 1 / intervalle', () => {
+  const r = signalRate({ config: { fields: { A: { interval_seconds: 10 }, B: { interval_seconds: 60 }, C: {} } } });
+  assert.ok(Math.abs(r.rate - (0.1 + 1 / 60)) < 1e-12);
+  assert.equal(r.n, 3);
+  assert.deepEqual(r.noInterval, ['C']);
+  assert.equal(signalRate({ fields: { A: { interval_seconds: 1 } } }).rate, 1); // corps envoyé { fields }
+});
+
+test('errorDetail : explication courte de Tessie', () => {
+  assert.equal(errorDetail('{"error":"Rate limit exceeded: max 1 signal per second"}'), 'Rate limit exceeded: max 1 signal per second');
+  assert.equal(errorDetail('<html><body>Bad  Request</body></html>'), 'Bad Request');
+  assert.equal(errorDetail(''), '');
+  assert.equal(errorDetail('x'.repeat(300)).length, 241);
+});
