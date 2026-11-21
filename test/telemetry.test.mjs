@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { configuredFields, withStatorField, findStatorValues, pickStatorTemp, findDriveValues, configFlags, itemValue } from '../js/telemetry.js';
+import { configuredFields, findStatorValues, pickStatorTemp, findDriveValues, configFlags, itemValue } from '../js/telemetry.js';
 
 const tessieConfig = {
   synced: true,
@@ -15,25 +15,6 @@ const tessieConfig = {
 test('configuredFields lit les champs, où qu\'ils soient', () => {
   assert.deepEqual(configuredFields(tessieConfig), ['BatteryLevel', 'Location']);
   assert.deepEqual(configuredFields({}), []);
-});
-
-test('withStatorField ajoute le champ sans rien retirer', () => {
-  const body = withStatorField(tessieConfig);
-  assert.deepEqual(Object.keys(body.fields), ['BatteryLevel', 'Location', 'DiStatorTempR', 'DiHeatsinkTR']);
-  assert.deepEqual(body.fields.DiStatorTempR, { interval_seconds: 30 });
-  // Seulement { fields } : le serveur, le certificat, l'expiration, etc. ne sont jamais renvoyés.
-  assert.deepEqual(Object.keys(body), ['fields']);
-  assert.equal(tessieConfig.config.fields.DiStatorTempR, undefined); // original intact
-});
-
-test('withStatorField refuse une configuration illisible ou vide', () => {
-  assert.equal(withStatorField({}), null);
-  assert.equal(withStatorField({ config: { fields: {} } }), null);
-});
-
-test('withStatorField ne modifie pas un champ déjà présent', () => {
-  const cfg = { fields: { DiStatorTempR: { interval_seconds: 300 }, X: {} } };
-  assert.deepEqual(withStatorField(cfg).fields.DiStatorTempR, { interval_seconds: 300 });
 });
 
 test('findStatorValues et pickStatorTemp (préférence pour l\'arrière)', () => {
@@ -151,25 +132,6 @@ test('applyPatch : complète la dernière mesure, une nouvelle au plus toutes le
   assert.equal(s[1].fromHistory, undefined);
 });
 
-import { driveFieldsStatus } from '../js/telemetry.js';
-
-test('withStatorField force : intervalle choisi, champs existants gardés', () => {
-  const cfg = { config: { fields: { BatteryLevel: { interval_seconds: 60 }, DiStatorTempR: { interval_seconds: 60, foo: 1 } } } };
-  const body = withStatorField(cfg, ['DiStatorTempR', 'DiHeatsinkTR'], 10, { force: true });
-  assert.deepEqual(body.fields.DiStatorTempR, { interval_seconds: 10, foo: 1 });
-  assert.deepEqual(body.fields.DiHeatsinkTR, { interval_seconds: 10 });
-  assert.deepEqual(body.fields.BatteryLevel, { interval_seconds: 60 });
-  assert.deepEqual(withStatorField(cfg, ['DiStatorTempR'], 10).fields.DiStatorTempR, { interval_seconds: 60, foo: 1 }); // sans force : inchangé
-});
-
-test('driveFieldsStatus : absents, autre intervalle, ok', () => {
-  const cfg = { config: { fields: { DiStatorTempR: { interval_seconds: 30 } } } };
-  assert.deepEqual(driveFieldsStatus(cfg).missing, ['DiHeatsinkTR']);
-  const both = { config: { fields: { DiStatorTempR: { interval_seconds: 30 }, DiHeatsinkTR: { interval_seconds: 60 } } } };
-  assert.equal(driveFieldsStatus(both).ok, true);
-  assert.deepEqual(driveFieldsStatus(both, 30).otherInterval, ['DiHeatsinkTR']);
-  assert.equal(driveFieldsStatus({}).missing.length, 2);
-});
 
 import { signalRate } from '../js/telemetry.js';
 import { errorDetail } from '../js/tessie.js';

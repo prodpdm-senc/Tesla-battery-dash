@@ -3,7 +3,7 @@
 
 /* global d3 */
 
-import { gapThreshold, splitAtGaps, gapZones } from './quality.js?v=26';
+import { gapThreshold, splitAtGaps, gapZones } from './quality.js?v=27';
 
 // Marges identiques pour les deux graphiques : les axes de temps s'alignent.
 const M = { top: 24, right: 62, bottom: 22, left: 40 };
@@ -263,7 +263,6 @@ export function createCharts({ tempEl, motorEl }) {
   const motor = new TimeChart(motorEl, {
     unit: '°C', height: 180, yMinSpan: 10,
     series: [
-      { key: 'statorTemp', label: 'Stator', short: 'stator', color: '--series-4', unit: '°C', connect: true },
       { key: 'heatsinkTemp', label: 'Échangeur de chaleur', short: 'échangeur', color: '--series-1', unit: '°C', connect: true },
     ],
   });

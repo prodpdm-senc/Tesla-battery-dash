@@ -1,7 +1,7 @@
 // Client Tessie minimal + normalisation des données en un « échantillon » plat.
 // Docs : https://developer.tessie.com
 
-import { pickStatorTemp } from './telemetry.js?v=26';
+import { pickStatorTemp } from './telemetry.js?v=27';
 
 export class ApiError extends Error {
   constructor(message, { status = 0, kind = 'http' } = {}) {
@@ -76,7 +76,6 @@ export class TessieClient {
   states(vin, query) { return this.get(`/${encodeURIComponent(vin)}/states?${query}`); }
   /** Configuration Fleet Telemetry (champs transmis par l'auto). */
   telemetryConfig(vin) { return this.get(`/${encodeURIComponent(vin)}/fleet_telemetry_config`); }
-  setTelemetryConfig(vin, body) { return this.post(`/${encodeURIComponent(vin)}/fleet_telemetry_config`, body); }
   battery(vin) { return this.get(`/${encodeURIComponent(vin)}/battery`); }
   // use_cache=true : ne réveille pas l'auto.
   state(vin) { return this.get(`/${encodeURIComponent(vin)}/state?use_cache=true`); }
