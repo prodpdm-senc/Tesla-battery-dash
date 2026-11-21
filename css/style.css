@@ -463,5 +463,3 @@ dialog .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .sess-list { max-height: 50vh; overflow-y: auto; }
   #chartHeat, #chartCharge { height: 220px; }
 }
-dialog label.tel-interval { display: flex; align-items: center; margin-top: 6px; }
-dialog label.tel-interval select { width: auto; margin-left: 8px; }

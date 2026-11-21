@@ -1,20 +1,20 @@
-import { TessieClient, ApiError } from './tessie.js?v=26';
-import { Simulator } from './simulator.js?v=26';
-import { estimate, pickTemp, formatDuration } from './estimator.js?v=26';
-import { settings as settingsStore, history, observations, appendSample } from './store.js?v=26';
-import { createCharts } from './charts.js?v=26';
-import { Gauges } from './gauges.js?v=26';
-import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=26';
-import { DRIVE_FIELDS, configuredFields, withStatorField, driveFieldsStatus, signalRate, TESSIE_MAX_RATE, findDriveValues, streamProbe, configFlags, LiveStream, attachMotor, applyPatch } from './telemetry.js?v=26';
-import { SessionsView, demoHistory } from './sessionsView.js?v=26';
-import { LayoutManager, BLOCKS } from './layout.js?v=26';
-import { detectHeatingEnd } from './events.js?v=26';
-import { cleanSample, FieldClock, heatingZones, isActive, streamSilent, heatingPowerKw, isNight, autoWindowStart } from './quality.js?v=26';
+import { TessieClient, ApiError } from './tessie.js?v=27';
+import { Simulator } from './simulator.js?v=27';
+import { estimate, pickTemp, formatDuration } from './estimator.js?v=27';
+import { settings as settingsStore, history, observations, appendSample } from './store.js?v=27';
+import { createCharts } from './charts.js?v=27';
+import { Gauges } from './gauges.js?v=27';
+import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=27';
+import { DRIVE_FIELDS, configuredFields, signalRate, TESSIE_MAX_RATE, findDriveValues, streamProbe, configFlags, LiveStream, attachMotor, applyPatch } from './telemetry.js?v=27';
+import { SessionsView, demoHistory } from './sessionsView.js?v=27';
+import { LayoutManager, BLOCKS } from './layout.js?v=27';
+import { detectHeatingEnd } from './events.js?v=27';
+import { cleanSample, FieldClock, heatingZones, isActive, streamSilent, heatingPowerKw, isNight, autoWindowStart } from './quality.js?v=27';
 
 // Version de l'app. Le même numéro est ajouté à l'adresse de chaque fichier (?v=…)
 // pour forcer les navigateurs (Chrome iPhone, auto) à charger la nouvelle version.
 // À augmenter à chaque mise en ligne ; test/version.test.mjs vérifie la cohérence.
-export const APP_VERSION = '26';
+export const APP_VERSION = '27';
 
 const DEFAULTS = {
   vin: '',
@@ -26,8 +26,6 @@ const DEFAULTS = {
   rememberToken: false,
   rangeMin: 60,
   ranges: {},          // fenêtre de temps par disposition : minutes ou 'auto' (défaut : Auto en Tableau de bord)
-  telInterval: 30,     // s, cadence demandée pour les champs du moteur (télémétrie de l'auto)
-  telFields: false,    // champs du moteur ajoutés par ce dashboard : on vérifie qu'ils restent
   demo: false,
   view: 'live',        // 'live' | 'sessions'
   theme: 'system',     // 'system' | 'sun' (selon le soleil) | 'dark' | 'light'
@@ -130,7 +128,6 @@ function startLive() {
   poll();
   backfill();
   startStream();
-  state.telTimer = setTimeout(watchTelemetryFields, 20000);
   if (state.s.view === 'sessions') sessions.show(`live:${state.s.vin}`);
 }
 
@@ -148,7 +145,6 @@ function startDemo() {
 
 function stop() {
   clearTimeout(state.timer);
-  clearTimeout(state.telTimer);
   state.timer = null;
   state.gen++;
   if (state.stream) { state.stream.stop(); state.stream = null; }
@@ -571,9 +567,9 @@ const CHIPS = [
   { id: 'heater', label: 'Chauffage', on: (s) => s.heaterOn },
   { id: 'precond', label: 'Précond.', on: (s) => s.preconditioning },
   // Stator · échangeur de chaleur de l'unité arrière (Profiler de Tessie).
-  { id: 'drive', label: 'Moteur arr.', on: (s) => s.statorTemp != null && s.statorTemp >= 40,
-    text: (s) => (s.statorTemp == null && s.heatsinkTemp == null ? '—'
-      : `${fmt(s.statorTemp, 0)} · ${fmt(s.heatsinkTemp, 0)} °C`) },
+  // Échangeur de chaleur de l'unité arrière : interface avec le glycol qui chauffe la batterie.
+  { id: 'drive', label: 'Échangeur', on: (s) => s.heatsinkTemp != null && s.heatsinkTemp >= 30,
+    text: (s) => (s.heatsinkTemp == null ? '—' : `${fmt(s.heatsinkTemp, 0)} °C`) },
 ];
 
 function chargingLabel(s) {
@@ -631,7 +627,7 @@ function renderCharts(est, last) {
   const markers = state.obs.filter((o) => o.t >= domain[0]).map((o) => ({ t: o.t, label: 'fin de chauffe' }));
   // La projection suit la métrique choisie ; la bande montre l'étendue min–max.
   charts.temp.update(state.samples, domain, { band: ['tempMin', 'tempMax'], target, projection, yInclude: [target], zones, markers });
-  const hasMotor = state.samples.some((x) => x.statorTemp != null || x.heatsinkTemp != null);
+  const hasMotor = state.samples.some((x) => x.heatsinkTemp != null);
   $('motorEmpty').hidden = hasMotor;
   for (const el of document.querySelectorAll('.legend-heat')) el.hidden = !zones.length;
   charts.motor.update(state.samples, domain, { zones, markers: markers.map((m) => ({ t: m.t })) });
@@ -790,7 +786,6 @@ function bindUi() {
   $('vinList').addEventListener('change', (e) => { form.elements.vin.value = e.target.value; });
   $('btnHistTest').addEventListener('click', testHistory);
   $('btnTelCheck').addEventListener('click', telCheck);
-  $('btnTelEnable').addEventListener('click', telEnable);
   $('btnTelStream').addEventListener('click', telStream);
   $('btnHistCopy').addEventListener('click', async () => {
     try { await navigator.clipboard.writeText($('histReport').textContent); formMsg('Rapport copié.'); }
@@ -832,7 +827,6 @@ function openSettings(message, focus) {
   f.interval.value = state.s.interval;
   f.metric.value = state.s.metric;
   f.windowMin.value = state.s.windowMin;
-  $('telInterval').value = String(state.s.telInterval || 30);
   f.theme.value = state.s.theme || 'system';
   f.baseUrl.value = state.s.baseUrl;
   $('vinList').hidden = true;
@@ -961,7 +955,7 @@ async function telCheck() {
     const sr = signalRate(cfg);
     lines.push(`Cadence totale : ${fmtRate(sr.rate)} signal/s sur ${sr.n} champs`
       + `${sr.noInterval.length ? ` (${sr.noInterval.length} sans intervalle lisible)` : ''}`
-      + ` (Tessie limite chaque champ à ${TESSIE_MAX_RATE} signal/s).`);
+      + ` · une configuration personnalisée est limitée par Tessie à ${TESSIE_MAX_RATE} signal/s au total : seule sa configuration recommandée peut aller au-delà.`);
     lines.push(`Champs configurés (${fields.length}) : ${fields.join(', ') || '—'}`);
     const flags = configFlags(cfg);
     lines.push(`Indicateurs : ${Object.keys(flags).map((k) => `${k} = ${flags[k]}`).join(' · ') || '—'}`);
@@ -984,85 +978,6 @@ async function telCheck() {
 
 /** Ajoute DiStatorTempR à la configuration existante (sans retirer d'autres champs), après confirmation. */
 const fmtRate = (r) => r.toFixed(2).replace('.', ',');
-
-async function telEnable() {
-  const ctx = telContext();
-  if (!ctx) return;
-  const { c, vin } = ctx;
-  const interval = Math.max(1, Number($('telInterval').value) || 30);
-  if (!window.confirm(`Ajouter ${DRIVE_FIELDS.join(', ')} à la télémétrie de l’auto, un point aux ${interval} s au plus ?\n`
-    + 'Les autres champs et réglages ne sont pas modifiés. Les températures du moteur arriveront alors sans le Profiler.')) return;
-  telOut('Lecture de la configuration actuelle…');
-  try {
-    const cfg = await c.telemetryConfig(vin);
-    if (driveFieldsStatus(cfg, interval).ok) {
-      telOut(`${DRIVE_FIELDS.join(', ')} : déjà configurés aux ${interval} s. Rien envoyé.`);
-      state.s.telFields = true; state.s.telInterval = interval; settingsStore.save(state.s);
-      return;
-    }
-    const body = withStatorField(cfg, DRIVE_FIELDS, interval, { force: true });
-    if (!body) {
-      telOut(`Configuration actuelle illisible ou vide : rien envoyé, pour ne pas remplacer celle de Tessie.\nStructure reçue : ${shape(cfg, 3)}`);
-      return;
-    }
-    if (configFlags(cfg).limit_reached === true) {
-      telOut('Tessie indique limit_reached = true : la limite de télémétrie semble atteinte. Rien envoyé.');
-      return;
-    }
-    // Documentation de Tessie : « custom configurations are limited to a maximum rate of 1 signal
-    // per second ». Lu comme une limite PAR CHAMP (intervalle d'au moins 1 s) : la configuration de
-    // Tessie elle-même compte ~49 champs à 1 s (~50 signaux/s au total) et elle est acceptée.
-    // On n'empêche donc plus l'envoi sur la cadence totale : on l'affiche, et Tessie tranche.
-    const rateBefore = signalRate(cfg), rateAfter = signalRate(body);
-    const tooFast = Object.keys(body.fields).filter((k) => {
-      const iv = body.fields[k] && Number(body.fields[k].interval_seconds);
-      return iv > 0 && iv < 1;
-    });
-    if (tooFast.length) {
-      telOut(`Rien envoyé : intervalle de moins de 1 s pour ${tooFast.join(', ')} (Tessie limite à 1 signal/s par champ).`);
-      return;
-    }
-    telOut(`Cadence totale : ${fmtRate(rateBefore.rate)} → ${fmtRate(rateAfter.rate)} signal/s. Envoi…`);
-    const res = await c.setTelemetryConfig(vin, body);
-    state.s.telFields = true; state.s.telInterval = interval; settingsStore.save(state.s);
-    telOut(`Envoyé : { fields } avec ${Object.keys(body.fields).length} champs (les ${configuredFields(cfg).length} actuels + ${DRIVE_FIELDS.join(', ')} aux ${interval} s).\n`
-      + `Réponse : ${shape(res, 3)}\nVérification dans 5 s…`);
-    // Relecture : Tessie a-t-elle gardé les champs et l'intervalle ?
-    await new Promise((ok) => setTimeout(ok, 5000));
-    const after = await c.telemetryConfig(vin);
-    const st = driveFieldsStatus(after, interval);
-    const flags = configFlags(after);
-    telOut(`${$('telReport').textContent}\n`
-      + (st.ok ? `Relu : les champs sont dans la configuration, aux ${interval} s.` : st.missing.length
-        ? `Relu : ${st.missing.join(', ')} ABSENT(S) de la configuration. Tessie ne les a pas gardés.`
-        : `Relu : présents, mais avec un autre intervalle que ${interval} s (${st.otherInterval.join(', ')}) : Tessie ou l’auto l’a ajusté.`)
-      + `\nsynced = ${flags.synced} (l’auto applique la configuration à son prochain réveil ; « Vérifier » dans quelques minutes).`
-      + '\nTest : arrête le Profiler, verrouille le téléphone, et regarde si le graphique « Moteur arrière » continue.');
-  } catch (e) {
-    telOut(`Échec : ${e.message}`);
-  }
-}
-
-/**
- * Champs du moteur ajoutés par ce dashboard : vérifie (au démarrage, puis toutes les 30 min)
- * qu'ils sont encore dans la configuration de l'auto. Tessie gère cette configuration et
- * pourrait la remplacer (ex. le Profiler) : on le signale plutôt que de le découvrir en roulant.
- */
-async function watchTelemetryFields() {
-  clearTimeout(state.telTimer);
-  if (state.sim || !state.s.telFields || !state.s.token || !state.s.vin) return;
-  const gen = state.gen;
-  try {
-    const cfg = await client().telemetryConfig(state.s.vin);
-    if (gen !== state.gen) return;
-    const st = driveFieldsStatus(cfg);
-    if (st.missing.length) {
-      banner('error', `Les températures du moteur (${st.missing.map(escapeHtml).join(', ')}) ont été retirées de la télémétrie de l’auto, probablement par Tessie. `
-        + 'Réglages → Avancé → « Activer ces 2 champs » pour les remettre.');
-    }
-  } catch (e) { /* vérification facultative : on réessaiera */ }
-  if (gen === state.gen) state.telTimer = setTimeout(watchTelemetryFields, 30 * 60000);
-}
 
 /** Écoute le flux en direct de Tessie 60 s et rapporte les champs reçus. */
 async function telStream() {

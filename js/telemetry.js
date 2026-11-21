@@ -4,9 +4,6 @@
 // Module pur (sauf streamProbe), testé.
 
 export const STATOR_FIELD = 'DiStatorTempR';
-// Intervalle par défaut (s) : chaque champ est envoyé quand il change, mais pas plus souvent
-// que cet intervalle (documentation de Tesla Fleet Telemetry). Choisi dans les Réglages.
-export const STATOR_INTERVAL_S = 30;
 /**
  * Unité d'entraînement arrière : stator et échangeur de chaleur (champs Fleet Telemetry).
  * L'onduleur (DiInverterTR) n'est plus lu : pas utile pour suivre la chauffe.
@@ -33,29 +30,10 @@ export function configuredFields(json) {
 }
 
 /**
- * Corps à envoyer pour AJOUTER les champs du moteur à la configuration existante :
- * seulement { fields } (forme documentée par Tessie), avec TOUS les champs actuels
- * inchangés plus les nouveaux. Le reste de la configuration (serveur, certificat,
- * expiration, identifiants) appartient à Tessie et n'est jamais renvoyé.
- * Retourne null si la configuration actuelle est illisible ou vide (on n'envoie alors
- * rien : envoyer seulement nos champs pourrait remplacer ceux de Tessie).
- */
-export function withStatorField(json, fields = DRIVE_FIELDS, interval = STATOR_INTERVAL_S, { force = false } = {}) {
-  const h = findFieldsHolder(json);
-  if (!h || !Object.keys(h.fields).length) return null;
-  const merged = JSON.parse(JSON.stringify(h.fields));
-  for (const f of [].concat(fields)) {
-    // force : remet aussi l'intervalle choisi sur un champ déjà présent (seul ce réglage change).
-    if (!merged[f]) merged[f] = { interval_seconds: interval };
-    else if (force && merged[f] && typeof merged[f] === 'object') merged[f] = Object.assign({}, merged[f], { interval_seconds: interval });
-  }
-  return { fields: merged };
-}
-
-/**
  * Cadence totale demandée par une configuration : somme de 1 / intervalle sur tous les champs
- * (signaux par seconde). Information seulement : la limite de Tessie (1 signal/s) s'applique
- * à chaque champ — sa propre configuration compte ~49 champs à 1 s.
+ * (signaux par seconde). Tessie limite une configuration personnalisée à 1 signal/s au total
+ * (réponse de Tessie : « 60 fields every 60 seconds or 200 fields every 200 seconds ») ;
+ * seule sa configuration recommandée (~50 signaux/s) va au-delà.
  * Un champ sans intervalle lisible est compté à part (noInterval).
  */
 export const TESSIE_MAX_RATE = 1;
@@ -70,15 +48,6 @@ export function signalRate(json) {
     if (iv > 0) rate += 1 / iv; else noInterval.push(k);
   }
   return { rate, n, noInterval };
-}
-
-/** Champs du moteur absents de la configuration, ou présents avec un autre intervalle. */
-export function driveFieldsStatus(json, interval = null, fields = DRIVE_FIELDS) {
-  const h = findFieldsHolder(json);
-  const have = h ? h.fields : {};
-  const missing = fields.filter((f) => !have[f]);
-  const otherInterval = interval == null ? [] : fields.filter((f) => have[f] && have[f].interval_seconds !== interval);
-  return { missing, otherInterval, ok: !missing.length && !otherInterval.length };
 }
 
 /** Indicateurs d'état de la configuration (booléens et dates seulement, rien de sensible). */
