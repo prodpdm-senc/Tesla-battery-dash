@@ -8,6 +8,7 @@ export const BLOCKS = {
   temp: 'Graphique · batterie',
   motor: 'Graphique · moteur',
   chips: 'Pastilles',
+  'g-battery': 'Batterie',
   'g-voltage': 'Tension',
   'g-current': 'Courant',
   'g-power': 'Puissance',
@@ -15,14 +16,16 @@ export const BLOCKS = {
   'g-charger': 'Chargeur',
   'g-outside': 'Extérieur',
 };
-const GAUGES = ['g-voltage', 'g-current', 'g-power', 'g-soc', 'g-charger', 'g-outside'];
+// Jauges visibles au départ. « Extérieur » est masquée (déjà affichée par l'auto) : la jauge
+// « Batterie » (module le plus froid, repère de la cible) prend sa place.
+const GAUGES = ['g-battery', 'g-voltage', 'g-current', 'g-power', 'g-soc', 'g-charger'];
 
 export const isGauge = (id) => id.indexOf('g-') === 0;
 
 /** Dispositions de départ. split = largeur de la colonne de gauche (%). */
 export const PRESETS = {
-  graphs: { label: 'Graphiques', split: 68, cols: [['hero', 'temp', 'motor'], ['chips'].concat(GAUGES)], hidden: [] },
-  dash: { label: 'Tableau de bord', split: 58, cols: [['chips'].concat(GAUGES), ['hero', 'temp', 'motor']], hidden: [] },
+  graphs: { label: 'Graphiques', split: 68, cols: [['hero', 'temp', 'motor'], ['chips'].concat(GAUGES)], hidden: ['g-outside'] },
+  dash: { label: 'Tableau de bord', split: 58, cols: [['chips'].concat(GAUGES), ['hero', 'temp', 'motor']], hidden: ['g-outside'] },
 };
 
 const clone = (l) => ({ split: l.split, cols: [l.cols[0].slice(), l.cols[1].slice()], hidden: l.hidden.slice() });
@@ -45,6 +48,17 @@ export function normalize(l, preset = PRESETS.graphs) {
     cols: [keep(src.cols[0]), keep(src.cols[1])],
     hidden: keep(src.hidden),
   };
+  // Disposition enregistrée avant la jauge « Batterie » : elle prend la place d'« Extérieur »,
+  // qui passe parmi les cartes masquées (réaffichable en mode édition).
+  if (!seen['g-battery']) {
+    seen['g-battery'] = true;
+    let placed = false;
+    for (const c of out.cols) {
+      const i = c.indexOf('g-outside');
+      if (i >= 0) { c.splice(i, 1, 'g-battery'); out.hidden.push('g-outside'); placed = true; }
+    }
+    if (!placed) out.cols[1].push('g-battery');
+  }
   for (const id of Object.keys(BLOCKS)) if (!seen[id]) out.cols[1].push(id);
   return out;
 }

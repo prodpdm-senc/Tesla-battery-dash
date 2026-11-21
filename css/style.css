@@ -460,3 +460,5 @@ dialog details summary { cursor: pointer; font-size: 12px; font-weight: 500; col
   .sess-list { max-height: 50vh; overflow-y: auto; }
   #chartHeat, #chartCharge { height: 220px; }
 }
+dialog label.tel-interval { display: flex; align-items: center; margin-top: 6px; }
+dialog label.tel-interval select { width: auto; margin-left: 8px; }

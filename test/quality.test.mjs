@@ -153,3 +153,20 @@ test('heatingZones : chauffe de la batterie, pas le préconditionnement', () => 
   // Cabine seulement : rien
   assert.equal(heatingZones(s.slice(0, 11)).length, 0);
 });
+
+import { autoWindowStart } from '../js/quality.js';
+
+test('autoWindowStart : début du trajet, fenêtre qui grandit', () => {
+  const now = 1000 * MIN;
+  const pts = [];
+  for (let m = 100; m <= 300; m += 1) pts.push({ t: m * MIN });       // trajet de la veille
+  for (let m = 940; m <= 1000; m += 0.5) pts.push({ t: m * MIN });    // trajet en cours, depuis 60 min
+  assert.equal(autoWindowStart(pts, now), 940 * MIN);
+  // Départ : au moins 10 min affichées
+  assert.equal(autoWindowStart(pts.filter((p) => p.t <= 1000 * MIN && p.t >= 997 * MIN), now), 990 * MIN);
+  // Aucun trou : au plus 12 h
+  const long = [];
+  for (let m = 0; m <= 1000; m += 1) long.push({ t: m * MIN });
+  assert.equal(autoWindowStart(long, now), now - 720 * MIN);
+  assert.equal(autoWindowStart([], now), now - 10 * MIN);
+});

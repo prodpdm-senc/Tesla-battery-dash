@@ -63,6 +63,8 @@ En mode Direct, le dashboard reste connecté au flux en direct de Tessie (`wss:/
 
 - **Deux dispositions**, un tap pour passer de l'une à l'autre (en-tête) : **Graphiques** (grands graphiques à gauche, jauges à droite) et **Tableau de bord** (grandes jauges à gauche, résumé et graphiques à droite).
 - **Mode édition** (bouton crayon) : chaque carte affiche une poignée (glisser au doigt, dans sa colonne ou vers l'autre) et un bouton pour la masquer. Cartes : résumé, graphique batterie, graphique moteur, pastilles, et chaque jauge (tension, courant, puissance, charge, chargeur, extérieur). La barre d'édition règle la largeur de la colonne de gauche, réaffiche les cartes masquées (« + Chargeur ») et réinitialise la disposition. Hors du mode édition, rien ne bouge.
+- **Fenêtre « Auto »** du graphique de température (par défaut en Tableau de bord) : le graphique commence au début du trajet (après la dernière période de plus de 20 min sans données, l'auto dormait) et s'étire à mesure qu'on roule ; 10 min au départ, 12 h au plus. Chaque disposition garde sa fenêtre (Graphiques : 1 h par défaut).
+- **Jauge Batterie** : module le plus froid, avec un trait à la cible ; la barre monte vers lui pendant la chauffe (max en dessous). Elle remplace « Extérieur », masquée par défaut (déjà affichée par l'auto) et réaffichable en mode édition.
 - Les jauges voisines se partagent des rangées équilibrées selon la largeur de leur colonne ; en grand, elles grossissent (chiffres lisibles d'un coup d'œil). Tout tient toujours dans la fenêtre.
 - Chaque disposition est enregistrée sur l'appareil (celle de l'auto ne change pas celle du téléphone). Sur téléphone, les deux colonnes s'empilent.
 
@@ -83,7 +85,7 @@ Dans *Réglages → Avancé → Moteur arrière* :
 
 - **Vérifier** (lecture seule) : champs configurés, indicateurs (`synced`, `limit_reached`, `key_paired`…), valeurs dans l'état et l'historique.
 - **Tester le flux (60 s)** : connexion, messages et champs reçus.
-- **Activer ces 2 champs** : seulement utile sans le Profiler. Envoie `{ fields }` (champs actuels inchangés + les 2 du moteur) ; jamais le reste de la configuration de Tessie ; rien n'est envoyé si la configuration est illisible ou si `limit_reached` est vrai.
+- **Activer ces 2 champs** : le Profiler de Tessie s'arrête dès que sa page se ferme (téléphone verrouillé) ; ce bouton ajoute plutôt les 2 champs du moteur **de façon permanente** à la configuration de télémétrie de l'auto, à la cadence choisie (10, 30 ou 60 s : un champ est envoyé quand il change, mais pas plus souvent). Après l'envoi, la configuration est relue pour confirmer que Tessie a gardé les champs et l'intervalle ; ensuite, le dashboard vérifie toutes les 30 min qu'ils y sont encore et affiche un avertissement sinon. Envoie `{ fields }` (champs actuels inchangés + les 2 du moteur) ; jamais le reste de la configuration de Tessie ; rien n'est envoyé si la configuration est illisible ou si `limit_reached` est vrai.
 
 ## Page Sessions
 

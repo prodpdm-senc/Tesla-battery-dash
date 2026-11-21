@@ -8,7 +8,7 @@
 //  - heatingPowerKw : puissance consommée par la chauffe, auto stationnée.
 //  - sunTimes / isNight : thème sombre selon le coucher du soleil.
 
-import { detectHeatingSessions } from './sessions.js?v=22';
+import { detectHeatingSessions } from './sessions.js?v=23';
 
 const MIN = 60000;
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -109,6 +109,20 @@ export function intervals(points, pred, maxGapMs = 5 * MIN) {
     if (on && !cur) { cur = { t0: p.t, t1: p.t }; out.push(cur); }
   }
   return out.filter((z) => z.t1 > z.t0);
+}
+
+/**
+ * Début de la fenêtre « Auto » du graphique : le début du trajet en cours, c'est-à-dire
+ * le premier point après le dernier trou de données de plus de `gapMs` (l'auto dormait).
+ * Au moins `minSpanMs` affichés (départ), au plus `maxSpanMs` (historique local).
+ */
+export function autoWindowStart(points, now, { gapMs = 20 * MIN, minSpanMs = 10 * MIN, maxSpanMs = 12 * 60 * MIN } = {}) {
+  let start = now;
+  for (let i = points.length - 1; i >= 0; i--) {
+    if (i < points.length - 1 && points[i + 1].t - points[i].t > gapMs) break;
+    if (points[i].t <= now) start = points[i].t;
+  }
+  return Math.max(now - maxSpanMs, Math.min(start, now - minSpanMs));
 }
 
 /** Fusionne des périodes qui se chevauchent (ou séparées de moins de `joinMs`). */

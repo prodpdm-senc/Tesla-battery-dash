@@ -20,7 +20,7 @@ test('configuredFields lit les champs, où qu\'ils soient', () => {
 test('withStatorField ajoute le champ sans rien retirer', () => {
   const body = withStatorField(tessieConfig);
   assert.deepEqual(Object.keys(body.fields), ['BatteryLevel', 'Location', 'DiStatorTempR', 'DiHeatsinkTR']);
-  assert.deepEqual(body.fields.DiStatorTempR, { interval_seconds: 60 });
+  assert.deepEqual(body.fields.DiStatorTempR, { interval_seconds: 30 });
   // Seulement { fields } : le serveur, le certificat, l'expiration, etc. ne sont jamais renvoyés.
   assert.deepEqual(Object.keys(body), ['fields']);
   assert.equal(tessieConfig.config.fields.DiStatorTempR, undefined); // original intact
@@ -149,4 +149,24 @@ test('applyPatch : complète la dernière mesure, une nouvelle au plus toutes le
   assert.equal(s[1].preconditioning, true);
   assert.equal(s[1].powerKw, 7);               // 350 V × 20 A
   assert.equal(s[1].fromHistory, undefined);
+});
+
+import { driveFieldsStatus } from '../js/telemetry.js';
+
+test('withStatorField force : intervalle choisi, champs existants gardés', () => {
+  const cfg = { config: { fields: { BatteryLevel: { interval_seconds: 60 }, DiStatorTempR: { interval_seconds: 60, foo: 1 } } } };
+  const body = withStatorField(cfg, ['DiStatorTempR', 'DiHeatsinkTR'], 10, { force: true });
+  assert.deepEqual(body.fields.DiStatorTempR, { interval_seconds: 10, foo: 1 });
+  assert.deepEqual(body.fields.DiHeatsinkTR, { interval_seconds: 10 });
+  assert.deepEqual(body.fields.BatteryLevel, { interval_seconds: 60 });
+  assert.deepEqual(withStatorField(cfg, ['DiStatorTempR'], 10).fields.DiStatorTempR, { interval_seconds: 60, foo: 1 }); // sans force : inchangé
+});
+
+test('driveFieldsStatus : absents, autre intervalle, ok', () => {
+  const cfg = { config: { fields: { DiStatorTempR: { interval_seconds: 30 } } } };
+  assert.deepEqual(driveFieldsStatus(cfg).missing, ['DiHeatsinkTR']);
+  const both = { config: { fields: { DiStatorTempR: { interval_seconds: 30 }, DiHeatsinkTR: { interval_seconds: 60 } } } };
+  assert.equal(driveFieldsStatus(both).ok, true);
+  assert.deepEqual(driveFieldsStatus(both, 30).otherInterval, ['DiHeatsinkTR']);
+  assert.equal(driveFieldsStatus({}).missing.length, 2);
 });
