@@ -1,20 +1,20 @@
-import { TessieClient, ApiError } from './tessie.js?v=24';
-import { Simulator } from './simulator.js?v=24';
-import { estimate, pickTemp, formatDuration } from './estimator.js?v=24';
-import { settings as settingsStore, history, observations, appendSample } from './store.js?v=24';
-import { createCharts } from './charts.js?v=24';
-import { Gauges } from './gauges.js?v=24';
-import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=24';
-import { DRIVE_FIELDS, configuredFields, withStatorField, driveFieldsStatus, signalRate, TESSIE_MAX_RATE, findDriveValues, streamProbe, configFlags, LiveStream, attachMotor, applyPatch } from './telemetry.js?v=24';
-import { SessionsView, demoHistory } from './sessionsView.js?v=24';
-import { LayoutManager, BLOCKS } from './layout.js?v=24';
-import { detectHeatingEnd } from './events.js?v=24';
-import { cleanSample, FieldClock, heatingZones, isActive, streamSilent, heatingPowerKw, isNight, autoWindowStart } from './quality.js?v=24';
+import { TessieClient, ApiError } from './tessie.js?v=25';
+import { Simulator } from './simulator.js?v=25';
+import { estimate, pickTemp, formatDuration } from './estimator.js?v=25';
+import { settings as settingsStore, history, observations, appendSample } from './store.js?v=25';
+import { createCharts } from './charts.js?v=25';
+import { Gauges } from './gauges.js?v=25';
+import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=25';
+import { DRIVE_FIELDS, configuredFields, withStatorField, driveFieldsStatus, signalRate, TESSIE_MAX_RATE, findDriveValues, streamProbe, configFlags, LiveStream, attachMotor, applyPatch } from './telemetry.js?v=25';
+import { SessionsView, demoHistory } from './sessionsView.js?v=25';
+import { LayoutManager, BLOCKS } from './layout.js?v=25';
+import { detectHeatingEnd } from './events.js?v=25';
+import { cleanSample, FieldClock, heatingZones, isActive, streamSilent, heatingPowerKw, isNight, autoWindowStart } from './quality.js?v=25';
 
 // Version de l'app. Le même numéro est ajouté à l'adresse de chaque fichier (?v=…)
 // pour forcer les navigateurs (Chrome iPhone, auto) à charger la nouvelle version.
 // À augmenter à chaque mise en ligne ; test/version.test.mjs vérifie la cohérence.
-export const APP_VERSION = '24';
+export const APP_VERSION = '25';
 
 const DEFAULTS = {
   vin: '',

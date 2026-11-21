@@ -1,7 +1,7 @@
 // Client Tessie minimal + normalisation des données en un « échantillon » plat.
 // Docs : https://developer.tessie.com
 
-import { pickStatorTemp } from './telemetry.js?v=24';
+import { pickStatorTemp } from './telemetry.js?v=25';
 
 export class ApiError extends Error {
   constructor(message, { status = 0, kind = 'http' } = {}) {
@@ -57,7 +57,10 @@ export class TessieClient {
       clearTimeout(timer);
     }
     if (res.status === 401 || res.status === 403) {
-      throw new ApiError('Token refusé par Tessie', { status: res.status, kind: 'auth' });
+      // Code et explication de Tessie : un 403 n'est pas toujours un mauvais token (blocage, limite…).
+      let detail = '';
+      try { detail = errorDetail(await res.text()); } catch (e) { /* pas de corps */ }
+      throw new ApiError(`Token refusé par Tessie (${res.status}${detail ? ` : ${detail}` : ''})`, { status: res.status, kind: 'auth' });
     }
     if (!res.ok) {
       // Le corps de la réponse explique souvent le refus (ex. limite de la télémétrie) : on le garde.

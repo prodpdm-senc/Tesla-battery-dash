@@ -1,4 +1,4 @@
-import { pickStatorTemp } from './telemetry.js?v=24';
+import { pickStatorTemp } from './telemetry.js?v=25';
 
 // Analyse de l'historique Tessie (/{vin}/states). Module pur, testé.
 // La forme exacte de la réponse n'est pas documentée publiquement : on cherche
