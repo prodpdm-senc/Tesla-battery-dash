@@ -1,20 +1,20 @@
-import { TessieClient, ApiError } from './tessie.js?v=23';
-import { Simulator } from './simulator.js?v=23';
-import { estimate, pickTemp, formatDuration } from './estimator.js?v=23';
-import { settings as settingsStore, history, observations, appendSample } from './store.js?v=23';
-import { createCharts } from './charts.js?v=23';
-import { Gauges } from './gauges.js?v=23';
-import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=23';
-import { DRIVE_FIELDS, configuredFields, withStatorField, driveFieldsStatus, findDriveValues, streamProbe, configFlags, LiveStream, attachMotor, applyPatch } from './telemetry.js?v=23';
-import { SessionsView, demoHistory } from './sessionsView.js?v=23';
-import { LayoutManager, BLOCKS } from './layout.js?v=23';
-import { detectHeatingEnd } from './events.js?v=23';
-import { cleanSample, FieldClock, heatingZones, isActive, streamSilent, heatingPowerKw, isNight, autoWindowStart } from './quality.js?v=23';
+import { TessieClient, ApiError } from './tessie.js?v=24';
+import { Simulator } from './simulator.js?v=24';
+import { estimate, pickTemp, formatDuration } from './estimator.js?v=24';
+import { settings as settingsStore, history, observations, appendSample } from './store.js?v=24';
+import { createCharts } from './charts.js?v=24';
+import { Gauges } from './gauges.js?v=24';
+import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=24';
+import { DRIVE_FIELDS, configuredFields, withStatorField, driveFieldsStatus, signalRate, TESSIE_MAX_RATE, findDriveValues, streamProbe, configFlags, LiveStream, attachMotor, applyPatch } from './telemetry.js?v=24';
+import { SessionsView, demoHistory } from './sessionsView.js?v=24';
+import { LayoutManager, BLOCKS } from './layout.js?v=24';
+import { detectHeatingEnd } from './events.js?v=24';
+import { cleanSample, FieldClock, heatingZones, isActive, streamSilent, heatingPowerKw, isNight, autoWindowStart } from './quality.js?v=24';
 
 // Version de l'app. Le même numéro est ajouté à l'adresse de chaque fichier (?v=…)
 // pour forcer les navigateurs (Chrome iPhone, auto) à charger la nouvelle version.
 // À augmenter à chaque mise en ligne ; test/version.test.mjs vérifie la cohérence.
-export const APP_VERSION = '23';
+export const APP_VERSION = '24';
 
 const DEFAULTS = {
   vin: '',
@@ -949,6 +949,10 @@ async function telCheck() {
     const cfg = await c.telemetryConfig(vin);
     const fields = configuredFields(cfg);
     for (const fld of DRIVE_FIELDS) lines.push(`${fld} : ${fields.includes(fld) ? 'configuré ✓' : 'absent de la configuration ✗'}`);
+    const sr = signalRate(cfg);
+    lines.push(`Cadence totale : ${fmtRate(sr.rate)} signal/s sur ${sr.n} champs`
+      + `${sr.noInterval.length ? ` (${sr.noInterval.length} sans intervalle lisible)` : ''}`
+      + ` · limite de Tessie pour une configuration personnalisée : ${TESSIE_MAX_RATE} signal/s.`);
     lines.push(`Champs configurés (${fields.length}) : ${fields.join(', ') || '—'}`);
     const flags = configFlags(cfg);
     lines.push(`Indicateurs : ${Object.keys(flags).map((k) => `${k} = ${flags[k]}`).join(' · ') || '—'}`);
@@ -970,6 +974,8 @@ async function telCheck() {
 }
 
 /** Ajoute DiStatorTempR à la configuration existante (sans retirer d'autres champs), après confirmation. */
+const fmtRate = (r) => r.toFixed(2).replace('.', ',');
+
 async function telEnable() {
   const ctx = telContext();
   if (!ctx) return;
@@ -992,6 +998,17 @@ async function telEnable() {
     }
     if (configFlags(cfg).limit_reached === true) {
       telOut('Tessie indique limit_reached = true : la limite de télémétrie semble atteinte. Rien envoyé.');
+      return;
+    }
+    // Tessie limite une configuration personnalisée à 1 signal/s au total (tous les champs).
+    const rateBefore = signalRate(cfg), rateAfter = signalRate(body);
+    if (rateAfter.rate > TESSIE_MAX_RATE) {
+      telOut(`Rien envoyé : avec ces 2 champs aux ${interval} s, la configuration demanderait ${fmtRate(rateAfter.rate)} signal/s au total.\n`
+        + `Tessie limite une configuration personnalisée à ${TESSIE_MAX_RATE} signal/s (documentation de Tessie) ; `
+        + `la configuration actuelle de Tessie en demande déjà ${fmtRate(rateBefore.rate)} sur ${rateBefore.n} champs.\n`
+        + (rateBefore.rate >= TESSIE_MAX_RATE
+          ? 'Ajouter les champs du moteur demanderait de ralentir d’autres champs de Tessie, ce qui peut nuire à ses fonctions (trajets, recharges…).'
+          : `Essaie une cadence plus lente (60 s demanderait ${fmtRate(rateBefore.rate + DRIVE_FIELDS.length / 60)} signal/s).`));
       return;
     }
     const res = await c.setTelemetryConfig(vin, body);

@@ -1,7 +1,7 @@
 // Client Tessie minimal + normalisation des données en un « échantillon » plat.
 // Docs : https://developer.tessie.com
 
-import { pickStatorTemp } from './telemetry.js?v=23';
+import { pickStatorTemp } from './telemetry.js?v=24';
 
 export class ApiError extends Error {
   constructor(message, { status = 0, kind = 'http' } = {}) {
@@ -9,6 +9,19 @@ export class ApiError extends Error {
     this.status = status;
     this.kind = kind; // 'http' | 'auth' | 'network' | 'timeout'
   }
+}
+
+/** Explication courte tirée du corps d'une réponse d'erreur (JSON { error | message } ou texte). */
+export function errorDetail(text) {
+  if (!text) return '';
+  let t = text;
+  try {
+    const j = JSON.parse(text);
+    t = (j && (j.error || j.message || j.reason || (j.errors && JSON.stringify(j.errors)))) || text;
+    if (typeof t !== 'string') t = JSON.stringify(t);
+  } catch (e) { /* texte brut */ }
+  t = t.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  return t.length > 240 ? `${t.slice(0, 240)}…` : t;
 }
 
 export class TessieClient {
@@ -47,7 +60,10 @@ export class TessieClient {
       throw new ApiError('Token refusé par Tessie', { status: res.status, kind: 'auth' });
     }
     if (!res.ok) {
-      throw new ApiError(`Tessie a répondu ${res.status}`, { status: res.status });
+      // Le corps de la réponse explique souvent le refus (ex. limite de la télémétrie) : on le garde.
+      let detail = '';
+      try { detail = errorDetail(await res.text()); } catch (e) { /* pas de corps */ }
+      throw new ApiError(`Tessie a répondu ${res.status}${detail ? ` : ${detail}` : ''}`, { status: res.status });
     }
     return res.json();
   }

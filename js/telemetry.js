@@ -52,6 +52,25 @@ export function withStatorField(json, fields = DRIVE_FIELDS, interval = STATOR_I
   return { fields: merged };
 }
 
+/**
+ * Cadence totale demandée par une configuration : somme de 1 / intervalle sur tous les champs
+ * (signaux par seconde). Tessie limite une configuration personnalisée à 1 signal/s au total.
+ * Un champ sans intervalle lisible est compté à part (noInterval).
+ */
+export const TESSIE_MAX_RATE = 1;
+export function signalRate(json) {
+  const h = findFieldsHolder(json);
+  const fields = h ? h.fields : (json && json.fields) || {};
+  let rate = 0, n = 0;
+  const noInterval = [];
+  for (const k of Object.keys(fields)) {
+    n++;
+    const iv = fields[k] && Number(fields[k].interval_seconds);
+    if (iv > 0) rate += 1 / iv; else noInterval.push(k);
+  }
+  return { rate, n, noInterval };
+}
+
 /** Champs du moteur absents de la configuration, ou présents avec un autre intervalle. */
 export function driveFieldsStatus(json, interval = null, fields = DRIVE_FIELDS) {
   const h = findFieldsHolder(json);
