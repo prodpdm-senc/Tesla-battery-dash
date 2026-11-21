@@ -56,7 +56,6 @@
         <button type="button" data-layout="dash">Tableau de bord</button>
       </div>
       <button class="btn btn-icon" id="btnEdit" type="button" title="Modifier la disposition" aria-label="Modifier la disposition" aria-pressed="false"><svg class="icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M13.5 6.5l4 4" stroke="currentColor" stroke-width="2.2"/></svg></button>
-      <button class="btn" id="btnDemo" type="button" aria-pressed="false">Démo</button>
       <button class="btn btn-icon" id="btnRefresh" type="button" title="Actualiser maintenant" aria-label="Actualiser maintenant"><svg class="icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button class="btn btn-primary" id="btnSettings" type="button">Réglages</button>
     </div>
@@ -237,8 +236,8 @@
     </div>
     <p class="muted small">L’intervalle sert au sondage de Tessie (préconditionnement, état de recharge…). Quand le flux en direct est coupé, le sondage passe à 15 s au plus.</p>
 
-    <details>
-      <summary>Avancé</summary>
+    <section class="dlg-advanced">
+      <h3>Avancé</h3>
       <label>URL de l'API (proxy éventuel)
         <input type="url" name="baseUrl" spellcheck="false">
       </label>
@@ -263,7 +262,7 @@
       <button class="btn" type="button" id="btnHistCopy" hidden>Copier le rapport</button>
       <p class="muted small" id="uaInfo"></p>
       <button class="btn btn-danger" type="button" id="btnClearHist">Effacer l'historique local</button>
-    </details>
+    </section>
 
   <section class="dlg-section" id="obsCard" hidden>
     <h3>Fins de chauffe observées</h3>

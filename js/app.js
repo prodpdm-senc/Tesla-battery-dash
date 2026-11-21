@@ -99,7 +99,9 @@ function init() {
   });
   bindUi();
   syncRangeButtons();
-  if (state.s.demo) startDemo();
+  // Plus de bouton Démo : le mode démo ne s'ouvre qu'avec l'adresse ?demo (essais de la page),
+  // et un ancien réglage « démo » enregistré est ignoré.
+  if (/[?&]demo\b/.test(location.search)) startDemo();
   else startLive();
   applyView();
 }
@@ -111,11 +113,10 @@ function client() {
 function startLive() {
   stop();
   state.sim = null;
-  $('btnDemo').setAttribute('aria-pressed', 'false');
   if (!state.s.token || !state.s.vin) {
     state.samples = [];
     setStatus('idle', 'Non configuré');
-    banner('info', 'Entre ton token Tessie et ton VIN dans <b>Réglages</b>, ou clique sur <b>Démo</b> pour voir le dashboard avec des données simulées.');
+    banner('info', 'Entre ton token Tessie et ton VIN dans <b>Réglages</b>.');
     render(true);
     return;
   }
@@ -139,7 +140,6 @@ function startDemo() {
   state.samples = state.sim.history();
   state.obs = [];
   state.fields.reset();
-  $('btnDemo').setAttribute('aria-pressed', 'true');
   banner('info', 'Mode démo : préconditionnement simulé d’un pack LFP par −5 °C. Aucune donnée réelle.');
   render(true);
   poll();
@@ -732,12 +732,6 @@ function bindUi() {
     state.s.view = b.dataset.view;
     settingsStore.save(state.s);
     applyView();
-  });
-  $('btnDemo').addEventListener('click', () => {
-    state.s.demo = !state.sim;
-    settingsStore.save(state.s);
-    state.errors = 0;
-    if (state.s.demo) startDemo(); else startLive();
   });
   $('rangeSeg').addEventListener('click', (e) => {
     const btn = e.target.closest('button');

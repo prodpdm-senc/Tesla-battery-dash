@@ -12,7 +12,7 @@ Données via l'API de [Tessie](https://developer.tessie.com). Page statique, san
 - **Jauges en barres verticales** (panneau de gauche) : tension, courant, puissance, charge (avec repère de la limite), chargeur et température extérieure, avec la valeur en texte dessous. Les grandeurs signées partent d'une ligne du zéro : vers le haut si positif, vers le bas si négatif. Les échelles fixes se modifient dans `GAUGES` (`js/app.js`).
 - **États** : recharge, chauffage batterie, préconditionnement.
 - **Fins de chauffe observées** (dans Réglages) : la température est notée quand le préconditionnement se termine, ou quand la puissance consommée chute alors que l'auto est stationnée et le préconditionnement encore actif. Le drapeau « chauffage batterie » ne suffit pas : il peut rester faux pendant la chauffe. Ça permet de **calibrer la vraie cible du BMS** (voir plus bas).
-- **Mode démo** : préconditionnement simulé d'un pack LFP. Il sert à essayer le dashboard sans token.
+- **Mode démo** (sans bouton) : ouvrir la page avec `?demo` à la fin de l'adresse. Préconditionnement simulé d'un pack LFP, pour essayer la page sans token.
 
 ## Démarrage
 
