@@ -3,7 +3,7 @@
 // du zéro, vers le haut si positif, vers le bas si négatif.
 // Une valeur trop vieille est atténuée et son âge remplace le texte du dessous.
 
-import { formatAge } from './quality.js?v=25';
+import { formatAge } from './quality.js?v=26';
 
 function clamp01(t) { return Math.max(0, Math.min(1, t)); }
 

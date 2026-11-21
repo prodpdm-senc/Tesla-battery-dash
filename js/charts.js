@@ -3,7 +3,7 @@
 
 /* global d3 */
 
-import { gapThreshold, splitAtGaps, gapZones } from './quality.js?v=25';
+import { gapThreshold, splitAtGaps, gapZones } from './quality.js?v=26';
 
 // Marges identiques pour les deux graphiques : les axes de temps s'alignent.
 const M = { top: 24, right: 62, bottom: 22, left: 40 };

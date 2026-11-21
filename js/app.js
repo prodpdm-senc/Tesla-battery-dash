@@ -1,20 +1,20 @@
-import { TessieClient, ApiError } from './tessie.js?v=25';
-import { Simulator } from './simulator.js?v=25';
-import { estimate, pickTemp, formatDuration } from './estimator.js?v=25';
-import { settings as settingsStore, history, observations, appendSample } from './store.js?v=25';
-import { createCharts } from './charts.js?v=25';
-import { Gauges } from './gauges.js?v=25';
-import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=25';
-import { DRIVE_FIELDS, configuredFields, withStatorField, driveFieldsStatus, signalRate, TESSIE_MAX_RATE, findDriveValues, streamProbe, configFlags, LiveStream, attachMotor, applyPatch } from './telemetry.js?v=25';
-import { SessionsView, demoHistory } from './sessionsView.js?v=25';
-import { LayoutManager, BLOCKS } from './layout.js?v=25';
-import { detectHeatingEnd } from './events.js?v=25';
-import { cleanSample, FieldClock, heatingZones, isActive, streamSilent, heatingPowerKw, isNight, autoWindowStart } from './quality.js?v=25';
+import { TessieClient, ApiError } from './tessie.js?v=26';
+import { Simulator } from './simulator.js?v=26';
+import { estimate, pickTemp, formatDuration } from './estimator.js?v=26';
+import { settings as settingsStore, history, observations, appendSample } from './store.js?v=26';
+import { createCharts } from './charts.js?v=26';
+import { Gauges } from './gauges.js?v=26';
+import { summarize, formatReport, statesToSamples, mergeSamples, shape, findRecords } from './history.js?v=26';
+import { DRIVE_FIELDS, configuredFields, withStatorField, driveFieldsStatus, signalRate, TESSIE_MAX_RATE, findDriveValues, streamProbe, configFlags, LiveStream, attachMotor, applyPatch } from './telemetry.js?v=26';
+import { SessionsView, demoHistory } from './sessionsView.js?v=26';
+import { LayoutManager, BLOCKS } from './layout.js?v=26';
+import { detectHeatingEnd } from './events.js?v=26';
+import { cleanSample, FieldClock, heatingZones, isActive, streamSilent, heatingPowerKw, isNight, autoWindowStart } from './quality.js?v=26';
 
 // Version de l'app. Le même numéro est ajouté à l'adresse de chaque fichier (?v=…)
 // pour forcer les navigateurs (Chrome iPhone, auto) à charger la nouvelle version.
 // À augmenter à chaque mise en ligne ; test/version.test.mjs vérifie la cohérence.
-export const APP_VERSION = '25';
+export const APP_VERSION = '26';
 
 const DEFAULTS = {
   vin: '',
@@ -769,6 +769,13 @@ function bindUi() {
     if ($('settings').returnValue === 'save') saveSettings(new FormData(form));
   });
   $('btnFindVin').addEventListener('click', findVins);
+  // Afficher le token pendant qu'on le tape (difficile à saisir à l'aveugle dans l'auto).
+  $('btnShowToken').addEventListener('click', () => {
+    const inp = $('settingsForm').elements.token;
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    $('btnShowToken').textContent = show ? 'Masquer' : 'Afficher';
+  });
   $('btnCarLink').addEventListener('click', async () => {
     const f = form.elements;
     const token = f.token.value.trim(), vin = f.vin.value.trim().toUpperCase();
@@ -815,6 +822,8 @@ function syncRangeButtons() {
 function openSettings(message, focus) {
   const f = $('settingsForm').elements;
   f.token.value = state.s.token || '';
+  f.token.type = 'password';
+  $('btnShowToken').textContent = 'Afficher';
   f.rememberToken.checked = !!state.s.rememberToken || (IS_CAR && !state.s.token);
   $('uaInfo').textContent = `Version ${APP_VERSION} · Navigateur : ${navigator.userAgent}`;
   $('carLink').hidden = true; $('carLinkHelp').hidden = true;
@@ -952,7 +961,7 @@ async function telCheck() {
     const sr = signalRate(cfg);
     lines.push(`Cadence totale : ${fmtRate(sr.rate)} signal/s sur ${sr.n} champs`
       + `${sr.noInterval.length ? ` (${sr.noInterval.length} sans intervalle lisible)` : ''}`
-      + ` · limite de Tessie pour une configuration personnalisée : ${TESSIE_MAX_RATE} signal/s.`);
+      + ` (Tessie limite chaque champ à ${TESSIE_MAX_RATE} signal/s).`);
     lines.push(`Champs configurés (${fields.length}) : ${fields.join(', ') || '—'}`);
     const flags = configFlags(cfg);
     lines.push(`Indicateurs : ${Object.keys(flags).map((k) => `${k} = ${flags[k]}`).join(' · ') || '—'}`);
@@ -1000,17 +1009,20 @@ async function telEnable() {
       telOut('Tessie indique limit_reached = true : la limite de télémétrie semble atteinte. Rien envoyé.');
       return;
     }
-    // Tessie limite une configuration personnalisée à 1 signal/s au total (tous les champs).
+    // Documentation de Tessie : « custom configurations are limited to a maximum rate of 1 signal
+    // per second ». Lu comme une limite PAR CHAMP (intervalle d'au moins 1 s) : la configuration de
+    // Tessie elle-même compte ~49 champs à 1 s (~50 signaux/s au total) et elle est acceptée.
+    // On n'empêche donc plus l'envoi sur la cadence totale : on l'affiche, et Tessie tranche.
     const rateBefore = signalRate(cfg), rateAfter = signalRate(body);
-    if (rateAfter.rate > TESSIE_MAX_RATE) {
-      telOut(`Rien envoyé : avec ces 2 champs aux ${interval} s, la configuration demanderait ${fmtRate(rateAfter.rate)} signal/s au total.\n`
-        + `Tessie limite une configuration personnalisée à ${TESSIE_MAX_RATE} signal/s (documentation de Tessie) ; `
-        + `la configuration actuelle de Tessie en demande déjà ${fmtRate(rateBefore.rate)} sur ${rateBefore.n} champs.\n`
-        + (rateBefore.rate >= TESSIE_MAX_RATE
-          ? 'Ajouter les champs du moteur demanderait de ralentir d’autres champs de Tessie, ce qui peut nuire à ses fonctions (trajets, recharges…).'
-          : `Essaie une cadence plus lente (60 s demanderait ${fmtRate(rateBefore.rate + DRIVE_FIELDS.length / 60)} signal/s).`));
+    const tooFast = Object.keys(body.fields).filter((k) => {
+      const iv = body.fields[k] && Number(body.fields[k].interval_seconds);
+      return iv > 0 && iv < 1;
+    });
+    if (tooFast.length) {
+      telOut(`Rien envoyé : intervalle de moins de 1 s pour ${tooFast.join(', ')} (Tessie limite à 1 signal/s par champ).`);
       return;
     }
+    telOut(`Cadence totale : ${fmtRate(rateBefore.rate)} → ${fmtRate(rateAfter.rate)} signal/s. Envoi…`);
     const res = await c.setTelemetryConfig(vin, body);
     state.s.telFields = true; state.s.telInterval = interval; settingsStore.save(state.s);
     telOut(`Envoyé : { fields } avec ${Object.keys(body.fields).length} champs (les ${configuredFields(cfg).length} actuels + ${DRIVE_FIELDS.join(', ')} aux ${interval} s).\n`
